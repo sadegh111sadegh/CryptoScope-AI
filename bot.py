@@ -1,34 +1,49 @@
+
 from analysis import build_report
 from telegram_bot import send_message
 
+
 def main():
-    market, direction, score, rows, headlines, high = build_report()
+
+    market, direction, score, factors, headlines, high = build_report()
 
     lines = [
         "📡 CRYPTOSCOPE AI",
         "",
-        f"MARKET: {direction}",
-        f"SCORE: {score}",
-        f"BTC DOMINANCE: {market.get('btc_dominance')}%",
+        f"🧭 وضعیت بازار: {direction}",
+        f"🎯 امتیاز: {score if score is not None else 'ناموجود'}",
+        f"₿ دامیننس بیت‌کوین: {market.get('btc_dominance', 'ناموجود')}%",
         "",
-        "MARKET FACTORS:"
+        "📊 عوامل تحلیل:"
     ]
 
-    for name, value in rows:
-        lines.append(f"{name}: {value}")
+    for name, value, detail in factors:
+
+        value_text = value if value is not None else "ناموجود"
+
+        lines.append(
+            f"• {name}: {value_text} | {detail}"
+        )
+
+    lines += ["", "🚨 اخبار مهم:"]
+
+    for item in high[:5]:
+
+        lines.append(
+            f"\n• {item['score']}/100"
+            f"\n{item['title']}"
+            f"\n{item['url']}"
+        )
+
+    if not high:
+        lines.append("خبر با ریسک بالا شناسایی نشد.")
 
     lines.append("")
-    lines.append("IMPORTANT NEWS:")
+    lines.append("⚠️ این گزارش توصیه خرید یا فروش نیست.")
 
-    if high:
-        for item in high[:5]:
-            lines.append(
-                f"\n{item['score']}/100 - {item['title']}\n{item['url']}"
-            )
-    else:
-        lines.append("No critical news found.")
+    if not send_message("\n".join(lines)):
+        raise RuntimeError("ارسال پیام تلگرام ناموفق بود.")
 
-    send_message("\n".join(lines))
 
 if __name__ == "__main__":
     main()
