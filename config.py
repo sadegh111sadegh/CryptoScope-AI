@@ -1,0 +1,8 @@
+import os
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+COINGECKO_DEMO_API_KEY = os.getenv(
+    "COINGECKO_DEMO_API_KEY", ""
+)
