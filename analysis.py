@@ -59,10 +59,14 @@ def build_report():
     etf = market.get("etf_flows") or {}
     btc_etf = (etf.get("assets") or {}).get("BTC")
     btc_etf_week = btc_etf.get("weekly_usd_m") if btc_etf else None
-    etf_detail = (
-        f"خالص جریان ETF بیت‌کوین در ۷ روز اخیر: {btc_etf_week:+.1f} میلیون دلار"
-        if btc_etf_week is not None else "داده جریان ETF بیت‌کوین در دسترس نیست"
-    )
+    if btc_etf_week is None:
+        etf_detail = "داده جریان ETF بیت‌کوین در دسترس نیست"
+    elif abs(float(btc_etf_week)) < 1:
+        etf_detail = "ورود و خروج پول ETF بیت‌کوین تقریباً متعادل بوده"
+    elif btc_etf_week > 0:
+        etf_detail = "در هفته اخیر پول به ETFهای بیت‌کوین وارد شده"
+    else:
+        etf_detail = "در هفته اخیر پول از ETFهای بیت‌کوین خارج شده"
     add("جریان خالص ETF بیت‌کوین", btc_etf_week, 0.12, etf_detail, 2)
 
     score = None
