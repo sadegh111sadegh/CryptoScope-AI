@@ -136,16 +136,30 @@ def get_market_snapshot():
     for chart in ("n-transactions", "hash-rate"):
         try:
             result = get_json("https://api.blockchain.info/charts/" + chart, {"timespan": "30days", "format": "json"})
-            values = []
+            points = []
             for item in result.get("values", []):
                 try:
-                    values.append(float(item.get("y")))
+                    timestamp = int(item.get("x"))
+                    value = float(item.get("y"))
+                    if timestamp > 0:
+                        points.append((timestamp, value))
                 except (TypeError, ValueError):
-                    pass
-            if len(values) >= 8:
-                data.setdefault("bitcoin_network", {})[chart] = {
-                    "latest": values[-1], "change_7d": pct_change(values[-8], values[-1]),
-                }
+                    continue
+            points.sort(key=lambda point: point[0])
+            if len(points) >= 2:
+                latest_ts, latest_value = points[-1]
+                target_ts = latest_ts - 7 * 86400
+                baseline_ts, baseline_value = min(points[:-1], key=lambda point: abs(point[0] - target_ts))
+                # Reject comparisons when the nearest baseline is more than 36 hours from the 7-day target.
+                if abs(baseline_ts - target_ts) <= 36 * 3600:
+                    data.setdefault("bitcoin_network", {})[chart] = {
+                        "latest": latest_value,
+                        "change_7d": pct_change(baseline_value, latest_value),
+                        "latest_date": datetime.fromtimestamp(latest_ts, timezone.utc).date().isoformat(),
+                        "baseline_date": datetime.fromtimestamp(baseline_ts, timezone.utc).date().isoformat(),
+                    }
+                else:
+                    data["errors"].append("Bitcoin " + chart + ": no reliable 7-day baseline")
         except Exception as exc:
             data["errors"].append("Bitcoin " + chart + ": " + str(exc))
     _fetch_etf_flows(data)
