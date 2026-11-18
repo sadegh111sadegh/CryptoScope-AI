@@ -1,4 +1,5 @@
 import requests
+import os
 from datetime import datetime, timezone
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -9,8 +10,8 @@ _retry = Retry(total=3, connect=3, read=3, backoff_factor=0.7, status_forcelist=
 SESSION.mount("https://", HTTPAdapter(max_retries=_retry))
 TIMEOUT = 25
 
-def get_json(url, params=None):
-    response = SESSION.get(url, params=params, timeout=TIMEOUT)
+def get_json(url, params=None, headers=None):
+    response = SESSION.get(url, params=params, headers=headers, timeout=TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -48,6 +49,37 @@ def _series_snapshot(rows, key):
         "change_7d": pct_change(valid[-8], valid[-1]),
         "change_30d": pct_change(valid[-31], valid[-1]) if len(valid) >= 31 else None,
     }
+
+def _fetch_etf_flows(data):
+    api_key = os.getenv("CRYPTOETF_API_KEY", "").strip()
+    if not api_key:
+        data["etf_flows"] = {"available": False, "reason": "CRYPTOETF_API_KEY is not configured"}
+        return
+    result = {"available": True, "assets": {}, "source": "CryptoETF.today"}
+    headers = {"Authorization": "Bearer " + api_key}
+    for symbol, asset in (("BTC", "btc"), ("ETH", "eth"), ("SOL", "sol")):
+        try:
+            payload = get_json("https://api.cryptoetf.today/api/v1/flows/" + asset, headers=headers)
+            days = payload.get("days") or []
+            valid = [row for row in days if row.get("netFlowUsdM") is not None]
+            valid.sort(key=lambda row: row.get("date", ""))
+            if not valid:
+                raise ValueError("No published flow records")
+            latest = valid[-1]
+            recent = valid[-7:]
+            result["assets"][symbol] = {
+                "date": latest.get("date"),
+                "daily_usd_m": float(latest["netFlowUsdM"]),
+                "weekly_usd_m": round(sum(float(row["netFlowUsdM"]) for row in recent), 2),
+                "days_count": len(recent),
+            }
+            result["updated_at"] = payload.get("updatedAt") or result.get("updated_at")
+        except Exception as exc:
+            result["assets"][symbol] = None
+            data["errors"].append("ETF " + symbol + " flows: " + str(exc))
+    result["available"] = any(value is not None for value in result["assets"].values())
+    data["etf_flows"] = result
+
 
 def get_market_snapshot():
     data = {"errors": [], "coins": {}, "collected_at": datetime.now(timezone.utc).isoformat()}
@@ -114,4 +146,5 @@ def get_market_snapshot():
                 }
         except Exception as exc:
             data["errors"].append("Bitcoin " + chart + ": " + str(exc))
+    _fetch_etf_flows(data)
     return data
