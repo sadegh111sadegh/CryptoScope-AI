@@ -14,12 +14,6 @@ def flow_label(value):
     strength = "زیاد" if abs(amount) >= 100 else "متوسط" if abs(amount) >= 25 else "کم"
     return ("ورود پول " if amount > 0 else "خروج پول ") + strength
 
-def dominance(value):
-    return "ناموجود" if value is None else f"{float(value):+.2f}٪"
-
-def dominance(value):
-    return "ناموجود" if value is None else f"{float(value):.2f}٪"
-
 def fear_bar(value):
     filled = max(0, min(10, round(value / 10)))
     return "🟥" * filled + "⬜" * (10 - filled)
