@@ -2,8 +2,23 @@ import html
 from analysis import build_report
 from telegram_bot import send_message
 
-def pct(value):
-    return "نامشخص" if value is None else f"{float(value):+.1f}٪"
+def trend_label(value):
+    if value is None:
+        return "اطلاعات کافی نداریم"
+    value = float(value)
+    if value >= 3:
+        return "خیلی زیاد رشد کرده"
+    if value >= 1:
+        return "رشد خوبی داشته"
+    if value >= 0.2:
+        return "کمی رشد کرده"
+    if value > -0.2:
+        return "تقریباً بدون تغییر بوده"
+    if value > -1:
+        return "کمی افت کرده"
+    if value > -3:
+        return "افت قابل توجهی داشته"
+    return "شدیداً افت کرده"
 
 def flow_label(value):
     if value is None:
@@ -39,25 +54,24 @@ def build_messages(report):
         f"🧭 <b>جمع‌بندی:</b> {html.escape(report['direction'])}",
         f"🔎 <b>اطمینان:</b> {report['confidence']} | بر پایه {usable} شاخص قابل استفاده",
         "", "💹 <b>نمای کلی بازار</b>",
-        f"• وضعیت کل بازار در ۲۴ ساعت: {pct(global_data.get('market_cap_change_24h'))}",
-        f"• قیمت بیت‌کوین: امروز {pct(btc.get('change_24h'))} | این هفته {pct(btc.get('change_7d'))}",
+        f"• ارزش کل بازار: در ۲۴ ساعت گذشته {trend_label(global_data.get('market_cap_change_24h'))}",
+        f"• بیت‌کوین: امروز {trend_label(btc.get('change_24h'))} | این هفته {trend_label(btc.get('change_7d'))}",
     ]
     if fg:
         value = fg["value"]
         lines += ["", "😨 <b>ترس و طمع بازار</b>",
-                  f"{fear_bar(value)}  <b>{value}/100 — {fg['interpretation']}</b>",
-                  "۰ = ترس شدید | ۱۰۰ = طمع شدید",
-                  "این شاخص احساسات را نشان می‌دهد، نه درصد احتمال ریزش یا رشد."]
+                  f"{fear_bar(value)}  <b>{fg['interpretation']}</b>",
+                  "این بخش فقط حال‌وهوای خریداران و فروشندگان را نشان می‌دهد."]
     else:
         lines += ["", "😨 <b>ترس و طمع:</b> داده دریافت نشد"]
 
     lines += ["", "🌊 <b>نقدینگی و سرمایه در اکوسیستم</b>"]
     if stable:
-        lines.append(f"• پول آماده ورود به بازار (استیبل‌کوین‌ها): {pct(stable.get('change_7d'))} در هفته اخیر")
+        lines.append(f"• پول آماده ورود به بازار: {trend_label(stable.get('change_7d'))}")
     else:
         lines.append("• عرضه استیبل‌کوین‌ها: داده در دسترس نیست")
     if tvl:
-        lines.append(f"• سرمایه قفل‌شده در دیفای: {pct(tvl.get('change_7d'))} در هفته اخیر")
+        lines.append(f"• سرمایه داخل پروژه‌های دیفای: {trend_label(tvl.get('change_7d'))}")
     else:
         lines.append("• TVL دیفای: داده در دسترس نیست")
 
