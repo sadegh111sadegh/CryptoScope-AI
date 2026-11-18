@@ -72,6 +72,23 @@ def build_messages(report):
     else:
         lines.append("• TVL دیفای: داده در دسترس نیست")
 
+    lines += ["", "📊 <b>جریان ورود و خروج پول ETF</b>"]
+    etf = market.get("etf_flows") or {}
+    if etf.get("available"):
+        for symbol, label in (("BTC", "بیت‌کوین"), ("ETH", "اتریوم"), ("SOL", "سولانا")):
+            flow = (etf.get("assets") or {}).get(symbol)
+            if flow:
+                daily = float(flow["daily_usd_m"])
+                weekly = float(flow["weekly_usd_m"])
+                daily_text = ("+" if daily >= 0 else "-") + "$" + f"{abs(daily):,.1f}M"
+                weekly_text = ("+" if weekly >= 0 else "-") + "$" + f"{abs(weekly):,.1f}M"
+                lines.append(f"• {label}: روز {daily_text} | مجموع ۷ روز اخیر {weekly_text}")
+                lines.append(f"  آخرین روز داده: {flow.get('date') or 'نامشخص'}")
+            else:
+                lines.append(f"• {label}: داده این دارایی منتشر نشده یا دریافت آن ناموفق بوده است.")
+        lines.append("  مثبت = ورود خالص پول به ETFها؛ منفی = خروج خالص. داده‌ها مربوط به ETFهای اسپات آمریکا و با تأخیر انتشار روزانه‌اند.")
+    else:
+        lines.append("• داده ETF دریافت نشد؛ کلید API رایگان تنظیم نشده یا منبع پاسخ نداده است.")
     lines += ["", "⛓️ <b>آنچین و سلامت شبکه بیت‌کوین</b>"]
     network = report.get("network", {})
     tx, hashrate = network.get("n-transactions"), network.get("hash-rate")
@@ -94,8 +111,8 @@ def build_messages(report):
     else:
         lines.append("منابع خبری پاسخ داده‌اند، اما خبر مهمی مطابق معیارهای این گزارش شناسایی نشد.")
 
-    lines += ["", "📌 <b>جریان واقعی پول؛ چه چیزی اندازه‌گیری نشده؟</b>",
-              "جریان خالص ETF، ورود/خروج صرافی‌ها و خریدوفروش نهنگ‌ها در این نسخه مستقیماً اندازه‌گیری نمی‌شوند؛ بنابراین رشد استیبل‌کوین یا TVL را ورود قطعی پول معرفی نمی‌کنیم.",
+    lines += ["", "📌 <b>محدودیت داده جریان پول</b>",
+              "جریان ETF از داده خالص روزانه ETFهای اسپات آمریکا اندازه‌گیری می‌شود. ورود/خروج صرافی‌ها و خریدوفروش نهنگ‌ها هنوز مستقیماً اندازه‌گیری نمی‌شوند؛ رشد استیبل‌کوین یا TVL نیز معادل ورود قطعی پول نیست.",
               "", "⚠️ این گزارش سناریوی تحلیلی است، نه پیش‌بینی قطعی یا توصیه خریدوفروش."]
     if market.get("errors"):
         lines += ["", f"ℹ️ تعداد منابع داده ناموفق: {len(market['errors'])}؛ بخش‌های بدون داده در گزارش مشخص شده‌اند."]
