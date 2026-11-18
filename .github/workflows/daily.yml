@@ -1,6 +1,8 @@
 name: CryptoScope Daily
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     # UTC: London open +30m, midday, New York open +30m, US afternoon
