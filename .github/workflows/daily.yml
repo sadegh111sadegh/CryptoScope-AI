@@ -3,7 +3,11 @@ name: CryptoScope Daily
 on:
   workflow_dispatch:
   schedule:
-    - cron: '15 6 * * *'
+    # UTC: London open +30m, midday, New York open +30m, US afternoon
+    - cron: '30 8 * * *'
+    - cron: '0 12 * * *'
+    - cron: '0 15 * * *'
+    - cron: '0 20 * * *'
 
 jobs:
   report:
