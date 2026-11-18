@@ -56,6 +56,15 @@ def build_report():
         _interpret(tvl_week, "سرمایه قفل‌شده در دیفای افزایش یافته",
                    "سرمایه قفل‌شده در دیفای کاهش یافته", "تغییر TVL ناچیز است"))
 
+    etf = market.get("etf_flows") or {}
+    btc_etf = (etf.get("assets") or {}).get("BTC")
+    btc_etf_week = btc_etf.get("weekly_usd_m") if btc_etf else None
+    etf_detail = (
+        f"خالص جریان ETF بیت‌کوین در ۷ روز اخیر: {btc_etf_week:+.1f} میلیون دلار"
+        if btc_etf_week is not None else "داده جریان ETF بیت‌کوین در دسترس نیست"
+    )
+    add("جریان خالص ETF بیت‌کوین", btc_etf_week, 0.12, etf_detail, 2)
+
     score = None
     if signals:
         denominator = sum(weight for _, weight in signals)
