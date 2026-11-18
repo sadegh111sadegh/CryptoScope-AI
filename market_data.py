@@ -1,129 +1,117 @@
 
-import os
 import requests
-from statistics import mean
+from datetime import datetime, timezone
 
-BASE = "https://api.coingecko.com/api/v3"
-
-SESSION = requests.Session()
-SESSION.headers.update({"User-Agent": "CryptoScope-AI/1.0"})
-
-key = os.getenv("COINGECKO_DEMO_API_KEY", "")
-if key:
-    SESSION.headers["x-cg-demo-api-key"] = key
+S = requests.Session()
+S.headers.update({"User-Agent": "CryptoScope-AI/2.0"})
+TIMEOUT = 20
 
 
-def get_data(url, params=None):
-    response = SESSION.get(url, params=params, timeout=20)
-    response.raise_for_status()
-    return response.json()
+def get_json(url, params=None):
+    r = S.get(url, params=params, timeout=TIMEOUT)
+    r.raise_for_status()
+    return r.json()
 
 
-def calculate_rsi(prices, period=14):
-    if len(prices) <= period:
+def pct_change(old, new):
+    if old in (None, 0) or new is None:
         return None
-
-    changes = [
-        prices[i] - prices[i - 1]
-        for i in range(1, len(prices))
-    ]
-
-    gains = [max(x, 0) for x in changes[-period:]]
-    losses = [abs(min(x, 0)) for x in changes[-period:]]
-
-    avg_gain = mean(gains)
-    avg_loss = mean(losses)
-
-    if avg_loss == 0:
-        return 100.0
-
-    rs = avg_gain / avg_loss
-    return round(100 - (100 / (1 + rs)), 1)
+    return round((new - old) / abs(old) * 100, 2)
 
 
 def get_market_snapshot():
+    data = {"errors": [], "coins": {}, "collected_at": datetime.now(timezone.utc).isoformat()}
 
-    result = {"errors": []}
+    # Global crypto market and asset data
+    try:
+        g = get_json("https://api.coingecko.com/api/v3/global")["data"]
+        data["global"] = {
+            "market_cap": g["total_market_cap"]["usd"],
+            "volume_24h": g["total_volume"]["usd"],
+            "btc_dominance": g["market_cap_percentage"]["btc"],
+            "market_cap_change_24h": g.get("market_cap_change_percentage_24h_usd")
+        }
+    except Exception as e:
+        data["errors"].append("CoinGecko global: " + str(e))
 
     try:
-        data = get_data(f"{BASE}/global")["data"]
-
-        result.update({
-            "market_cap_usd": data["total_market_cap"]["usd"],
-            "volume_24h_usd": data["total_volume"]["usd"],
-            "btc_dominance": data["market_cap_percentage"]["btc"],
-            "eth_dominance": data["market_cap_percentage"]["eth"],
-            "market_cap_change_24h_pct":
-                data.get("market_cap_change_percentage_24h_usd")
-        })
-
-    except Exception as error:
-        result["errors"].append(f"Market: {error}")
-
-    try:
-        coins = get_data(
-            f"{BASE}/coins/markets",
+        coins = get_json(
+            "https://api.coingecko.com/api/v3/coins/markets",
             {
                 "vs_currency": "usd",
-                "ids": "bitcoin,ethereum,cardano,solana",
-                "price_change_percentage": "1h,24h,7d"
+                "ids": "bitcoin,ethereum,solana",
+                "price_change_percentage": "24h,7d"
             }
         )
-
-        result["coins"] = {
-            coin["id"]: {
-                "name": coin["name"],
-                "symbol": coin["symbol"].upper(),
-                "price": coin["current_price"],
-                "change_1h": coin.get(
-                    "price_change_percentage_1h_in_currency"
-                ),
-                "change_24h": coin.get(
-                    "price_change_percentage_24h_in_currency"
-                ),
-                "change_7d": coin.get(
-                    "price_change_percentage_7d_in_currency"
-                )
+        for c in coins:
+            data["coins"][c["id"]] = {
+                "name": c["name"],
+                "price": c.get("current_price"),
+                "change_24h": c.get("price_change_percentage_24h"),
+                "change_7d": c.get("price_change_percentage_7d_in_currency")
             }
-            for coin in coins
-        }
+    except Exception as e:
+        data["errors"].append("CoinGecko coins: " + str(e))
 
-    except Exception as error:
-        result["coins"] = {}
-        result["errors"].append(f"Coins: {error}")
-
+    # Fear and Greed
     try:
-        fg = get_data(
-            "https://api.alternative.me/fng/?limit=1&format=json"
-        )
-
-        item = fg["data"][0]
-
-        result["fear_greed"] = {
-            "value": int(item["value"]),
-            "label": item["value_classification"]
+        fg = get_json("https://api.alternative.me/fng/?limit=1")["data"][0]
+        data["fear_greed"] = {
+            "value": int(fg["value"]),
+            "label": fg["value_classification"]
         }
+    except Exception as e:
+        data["fear_greed"] = None
+        data["errors"].append("Fear and Greed: " + str(e))
 
-    except Exception as error:
-        result["fear_greed"] = None
-        result["errors"].append(f"Fear Greed: {error}")
-
+    # Stablecoin supply: liquidity proxy
     try:
-        chart = get_data(
-            f"{BASE}/coins/bitcoin/market_chart",
-            {"vs_currency": "usd", "days": "14"}
-        )
+        rows = get_json("https://stablecoins.llama.fi/stablecoincharts/all")
+        rows = sorted(rows, key=lambda x: x.get("date", 0))
+        if len(rows) >= 8:
+            latest = rows[-1].get("totalCirculatingUSD", {}).get("peggedUSD")
+            week = rows[-8].get("totalCirculatingUSD", {}).get("peggedUSD")
+            month = rows[-31].get("totalCirculatingUSD", {}).get("peggedUSD") if len(rows) >= 31 else None
+            data["stablecoins"] = {
+                "latest": latest,
+                "change_7d": pct_change(week, latest),
+                "change_30d": pct_change(month, latest)
+            }
+    except Exception as e:
+        data["stablecoins"] = None
+        data["errors"].append("Stablecoin data: " + str(e))
 
-        prices = [p[1] for p in chart["prices"]]
+    # DeFi TVL: capital deployed in DeFi protocols
+    try:
+        tvl = get_json("https://api.llama.fi/v2/historicalChainTvl")
+        tvl = sorted(tvl, key=lambda x: x.get("date", 0))
+        if len(tvl) >= 8:
+            latest = tvl[-1].get("tvl")
+            week = tvl[-8].get("tvl")
+            month = tvl[-31].get("tvl") if len(tvl) >= 31 else None
+            data["defi_tvl"] = {
+                "latest": latest,
+                "change_7d": pct_change(week, latest),
+                "change_30d": pct_change(month, latest)
+            }
+    except Exception as e:
+        data["defi_tvl"] = None
+        data["errors"].append("DeFi TVL: " + str(e))
 
-        result["technical"] = {
-            "rsi_14": calculate_rsi(prices),
-            "sma_7": round(mean(prices[-7:]), 2),
-            "sma_14": round(mean(prices[-14:]), 2)
-        }
+    # Bitcoin network activity
+    for chart in ("n-transactions", "hash-rate"):
+        try:
+            result = get_json(
+                f"https://api.blockchain.info/charts/{chart}",
+                {"timespan": "30days", "format": "json"}
+            )
+            values = [x["y"] for x in result.get("values", [])]
+            if len(values) >= 8:
+                data.setdefault("bitcoin_network", {})[chart] = {
+                    "change_7d": pct_change(values[-8], values[-1]),
+                    "latest": values[-1]
+                }
+        except Exception as e:
+            data["errors"].append(f"Bitcoin {chart}: {e}")
 
-    except Exception as error:
-        result["technical"] = {}
-        result["errors"].append(f"Technical: {error}")
-
-    return result
+    return data
