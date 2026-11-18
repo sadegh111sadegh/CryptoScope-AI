@@ -7,12 +7,12 @@ def money(value):
         return "ناموجود"
     value = float(value)
     if value >= 1_000_000_000_000:
-        return f"\${value / 1_000_000_000_000:.2f} تریلیون"
+        return "$" + f"{value / 1_000_000_000_000:.2f} تریلیون"
     if value >= 1_000_000_000:
-        return f"\${value / 1_000_000_000:.2f} میلیارد"
+        return "$" + f"{value / 1_000_000_000:.2f} میلیارد"
     if value >= 1_000_000:
-        return f"\${value / 1_000_000:.2f} میلیون"
-    return f"\${value:,.0f}"
+        return "$" + f"{value / 1_000_000:.2f} میلیون"
+    return "$" + f"{value:,.0f}"
 
 def pct(value):
     return "ناموجود" if value is None else f"{float(value):+.2f}٪"
