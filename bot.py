@@ -95,12 +95,8 @@ def build_messages(report):
                 lines.append("  علت: " + html.escape(str(err)[:350]))
         else:
             lines.append("  علت: جزئیات خطا ثبت نشده است.")
-    lines += ["", "⛓️ <b>آنچین و سلامت شبکه بیت‌کوین</b>"]
-    network = report.get("network", {})
-    tx, hashrate = network.get("n-transactions"), network.get("hash-rate")
-    lines.append(f"• تعداد تراکنش‌ها: تغییر ۷ روزه {pct(tx.get('change_7d'))}" if tx else "• تعداد تراکنش‌ها: داده در دسترس نیست")
-    lines.append(f"• هش‌ریت شبکه: تغییر ۷ روزه {pct(hashrate.get('change_7d'))}" if hashrate else "• هش‌ریت شبکه: داده در دسترس نیست")
-    lines.append("  این شاخص‌ها وضعیت استفاده و امنیت شبکه را توصیف می‌کنند؛ به‌تنهایی سیگنال خرید یا فروش نیستند.")
+    lines += ["", "⛓️ <b>آنچین و سلامت شبکه بیت‌کوین</b>",
+              "⚠️ داده‌های تغییر ۷روزه تراکنش‌ها و هش‌ریت فعلاً از گزارش حذف شده‌اند؛ محاسبه قبلی قابل اتکا نبود و تا اعتبارسنجی مستقل، عددی نمایش داده نمی‌شود."]
 
     lines += ["", "🧠 <b>تفسیر عوامل اثرگذار</b>"]
     for factor in report["factors"]:
