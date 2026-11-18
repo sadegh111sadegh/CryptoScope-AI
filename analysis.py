@@ -1,170 +1,98 @@
-
 from market_data import get_market_snapshot
 from news import fetch_news
 
-
-def clamp(x):
-    return max(-100, min(100, round(x)))
-
-
-def trend_score(change, multiplier=8):
-    if change is None:
+def _number(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
         return None
-    return clamp(change * multiplier)
 
+def _score(change, multiplier):
+    value = _number(change)
+    if value is None:
+        return None
+    return max(-100, min(100, round(value * multiplier)))
+
+def _interpret(change, positive, negative, neutral="تقریباً بدون تغییر"):
+    value = _number(change)
+    if value is None:
+        return "داده در دسترس نیست"
+    if value > 0.15:
+        return positive
+    if value < -0.15:
+        return negative
+    return neutral
 
 def build_report():
     market = get_market_snapshot()
     news = fetch_news()
+    factors, signals = [], []
 
-    factors = []
-    scores = []
-
-    def add(name, score, detail, weight=1):
-        factors.append({
-            "name": name,
-            "score": score,
-            "detail": detail
-        })
+    def add(name, change, multiplier, detail, weight=1):
+        score = _score(change, multiplier)
+        factors.append({"name": name, "score": score, "detail": detail})
         if score is not None:
-            scores.extend([score] * weight)
+            signals.append((score, weight))
 
-    # Broad market fundamentals
-    global_data = market.get("global", {})
+    global_data = market.get("global") or {}
     cap_change = global_data.get("market_cap_change_24h")
+    add("ارزش کل بازار", cap_change, 7,
+        _interpret(cap_change, "نشانه رشد کوتاه‌مدت ارزش بازار", "نشانه افت کوتاه‌مدت ارزش بازار"), 2)
 
-    add(
-        "ارزش کل بازار",
-        trend_score(cap_change, 5),
-        f"تغییر ۲۴ ساعته: {cap_change:.2f}%"
-        if cap_change is not None else "داده در دسترس نیست",
-        2
-    )
-
-    # Stablecoin supply
-    stable = market.get("stablecoins")
-    if stable:
-        stable_score = trend_score(stable.get("change_7d"), 10)
-        add(
-            "عرضه استیبل‌کوین‌ها",
-            stable_score,
-            f"۷ روزه: {stable.get('change_7d')}% | ۳۰ روزه: {stable.get('change_30d')}%",
-            2
-        )
-    else:
-        add("عرضه استیبل‌کوین‌ها", None, "داده در دسترس نیست")
-
-    # DeFi TVL
-    tvl = market.get("defi_tvl")
-    if tvl:
-        tvl_score = trend_score(tvl.get("change_7d"), 8)
-        add(
-            "ارزش قفل‌شده دیفای (TVL)",
-            tvl_score,
-            f"۷ روزه: {tvl.get('change_7d')}% | ۳۰ روزه: {tvl.get('change_30d')}%",
-            2
-        )
-    else:
-        add("ارزش قفل‌شده دیفای", None, "داده در دسترس نیست")
-
-    # Bitcoin network activity
-    network = market.get("bitcoin_network", {})
-    tx = network.get("n-transactions")
-    if tx:
-        add(
-            "فعالیت شبکه بیت‌کوین",
-            trend_score(tx.get("change_7d"), 8),
-            f"تغییر تراکنش‌ها در ۷ روز: {tx.get('change_7d')}%"
-        )
-    else:
-        add("فعالیت شبکه بیت‌کوین", None, "داده در دسترس نیست")
-
-    # Bitcoin hashrate: network security / miner participation proxy
-    hr = network.get("hash-rate")
-    if hr:
-        add(
-            "قدرت شبکه بیت‌کوین",
-            trend_score(hr.get("change_7d"), 8),
-            f"تغییر هش‌ریت در ۷ روز: {hr.get('change_7d')}%"
-        )
-    else:
-        add("قدرت شبکه بیت‌کوین", None, "داده در دسترس نیست")
-
-    # Sentiment is a secondary indicator
-    fg = market.get("fear_greed")
-    if fg:
-        fg_score = clamp((fg["value"] - 50) * 1.2)
-        add(
-            "احساسات بازار",
-            fg_score,
-            f'{fg["value"]}/100 - {fg["label"]}'
-        )
-    else:
-        add("احساسات بازار", None, "داده در دسترس نیست")
-
-    # BTC price is context, not technical analysis
     btc = market.get("coins", {}).get("bitcoin", {})
-    btc_change = btc.get("change_7d")
-    add(
-        "عملکرد هفتگی بیت‌کوین",
-        trend_score(btc_change, 5),
-        f"تغییر ۷ روزه: {btc_change}%"
-        if btc_change is not None else "داده در دسترس نیست"
-    )
+    btc_week = btc.get("change_7d")
+    add("عملکرد هفتگی بیت‌کوین", btc_week, 4,
+        _interpret(btc_week, "بیت‌کوین در هفته اخیر رشد داشته", "بیت‌کوین در هفته اخیر افت داشته"), 2)
 
-    score = round(sum(scores) / len(scores)) if scores else None
+    stable = market.get("stablecoins")
+    stable_week = stable.get("change_7d") if stable else None
+    add("عرضه استیبل‌کوین‌ها", stable_week, 35,
+        _interpret(stable_week, "عرضه در حال افزایش است؛ می‌تواند ظرفیت نقدینگی را بیشتر کند",
+                   "عرضه کاهش یافته؛ می‌تواند نشانه جمع‌شدن بخشی از نقدینگی باشد", "تغییر عرضه ناچیز است"))
 
-    if score is None:
-        direction = "نامشخص"
-    elif score >= 20:
+    tvl = market.get("defi_tvl")
+    tvl_week = tvl.get("change_7d") if tvl else None
+    add("ارزش قفل‌شده دیفای", tvl_week, 8,
+        _interpret(tvl_week, "سرمایه قفل‌شده در دیفای افزایش یافته",
+                   "سرمایه قفل‌شده در دیفای کاهش یافته", "تغییر TVL ناچیز است"))
+
+    score = None
+    if signals:
+        denominator = sum(weight for _, weight in signals)
+        score = round(sum(value * weight for value, weight in signals) / denominator)
+
+    if score is None or len(signals) < 2:
+        direction = "داده کافی نیست"
+    elif score >= 15:
         direction = "تمایل صعودی"
-    elif score <= -20:
+    elif score <= -15:
         direction = "تمایل نزولی"
     else:
-        direction = "خنثی / بدون جهت روشن"
+        direction = "خنثی؛ جهت مشخصی دیده نمی‌شود"
 
-    available = sum(1 for f in factors if f["score"] is not None)
-    confidence = (
-        "متوسط" if available >= 5
-        else "پایین" if available >= 3
-        else "بسیار پایین"
+    confidence = "متوسط" if len(signals) >= 4 else "پایین" if len(signals) >= 2 else "بسیار پایین"
+    valid_scores = [value for value, _ in signals]
+    aligned = len(valid_scores) >= 3 and (
+        all(value > 8 for value in valid_scores) or all(value < -8 for value in valid_scores)
     )
-
-    # Estimate horizon only when independent liquidity indicators agree
-    stable_change = (stable or {}).get("change_7d")
-    tvl_change = (tvl or {}).get("change_7d")
-
-    aligned = (
-        stable_change is not None and tvl_change is not None
-        and stable_change * tvl_change > 0
-    )
-
-    if score is not None and abs(score) >= 25 and aligned and available >= 5:
-        horizon = "حدود ۱ تا ۳ هفته؛ تخمین مشروط با اطمینان متوسط رو به پایین"
-    elif score is not None and abs(score) >= 20 and available >= 4:
-        horizon = "احتمالاً چند روز؛ برای تخمین طولانی‌تر شواهد کافی نیست"
+    if aligned and confidence == "متوسط":
+        horizon = "اگر شرایط فعلی حفظ شود، ادامه جهت غالب برای چند روز تا حدود یک هفته محتمل است؛ این سناریو باید روزانه بازبینی شود."
     else:
-        horizon = "فعلاً قابل تخمین نیست؛ شاخص‌ها هم‌جهتی کافی ندارند"
+        horizon = "با داده‌های فعلی مدت روند قابل تخمین قابل اتکا نیست؛ شاخص‌ها هم‌جهتی کافی ندارند."
 
-    # Important headlines are risk context, not automatic bearish signals
-    important_news = [
-        item for item in news.get("items", [])
-        if item["score"] >= 70
-    ][:7]
+    fear_greed = market.get("fear_greed")
+    if fear_greed:
+        value = fear_greed["value"]
+        fear_greed["interpretation"] = (
+            "ترس شدید" if value <= 20 else "ترس" if value <= 40 else
+            "خنثی" if value <= 60 else "طمع" if value <= 80 else "طمع شدید"
+        )
 
-    critical_news = [
-        item for item in news.get("items", [])
-        if item["level"] == "بحرانی"
-    ][:5]
-
+    important_news = [item for item in news.get("items", []) if item["score"] >= 70][:7]
+    critical_news = [item for item in important_news if item["level"] == "بحرانی"][:5]
     return {
-        "market": market,
-        "direction": direction,
-        "score": score,
-        "confidence": confidence,
-        "horizon": horizon,
-        "factors": factors,
-        "news": news,
-        "important_news": important_news,
-        "critical_news": critical_news
+        "market": market, "direction": direction, "score": score,
+        "confidence": confidence, "horizon": horizon, "factors": factors,
+        "network": market.get("bitcoin_network", {}), "news": news,
+        "important_news": important_news, "critical_news": critical_news,
     }
