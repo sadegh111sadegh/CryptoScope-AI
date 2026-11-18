@@ -1,274 +1,90 @@
-
 import streamlit as st
 import pandas as pd
 from analysis import build_report
 
-st.set_page_config(
-    page_title="CryptoScope AI",
-    page_icon="📡",
-    layout="wide"
-)
-
+st.set_page_config(page_title="CryptoScope AI", page_icon="📡", layout="wide")
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap');
-
-html,body,[class*="css"] {
-    font-family: Vazirmatn,sans-serif;
-    direction: rtl;
-}
-
-.stApp {
-    background: #080d18;
-    color: #e5e7eb;
-}
-
-.block-container {
-    max-width: 1450px;
-}
-
-.hero {
-    padding: 25px;
-    border-radius: 18px;
-    background: linear-gradient(120deg,#14233c,#172554);
-    border: 1px solid #26364f;
-    margin-bottom: 20px;
-}
-
-.metric {
-    background: #111d30;
-    border: 1px solid #26364f;
-    border-radius: 15px;
-    padding: 18px;
-    margin-bottom: 10px;
-}
-
-.metric-title {
-    color: #9fb2cc;
-    font-size: 13px;
-}
-
-.metric-value {
-    font-size: 24px;
-    font-weight: 800;
-    color: white;
-}
-
-.panel {
-    background: #101b2c;
-    border: 1px solid #26364f;
-    border-radius: 16px;
-    padding: 18px;
-    margin: 12px 0;
-}
-
+html,body,[class*="css"]{font-family:Vazirmatn,sans-serif;direction:rtl}
+.stApp{background:#080d18;color:#e5e7eb}.block-container{max-width:1450px}
+.hero,.panel,.metric{background:#101b2c;border:1px solid #26364f;border-radius:16px;padding:18px;margin:12px 0}
+.hero{background:linear-gradient(120deg,#14233c,#172554)}
+.metric-title{color:#9fb2cc;font-size:13px}.metric-value{font-size:23px;font-weight:800;color:white}
 </style>
 """, unsafe_allow_html=True)
 
+def money(v):
+    if v is None:return "ناموجود"
+    v=float(v)
+    for threshold,unit in ((1e12,"T"),(1e9,"B"),(1e6,"M")):
+        if abs(v)>=threshold:return f"${v/threshold:.2f} {unit}"
+    return f"${v:,.2f}"
 
-def money(value):
+def pct(v): return "ناموجود" if v is None else f"{float(v):+.2f}%"
 
-    if value is None:
-        return "ناموجود"
-
-    if value >= 1e12:
-        return f"${value / 1e12:.2f} T"
-
-    if value >= 1e9:
-        return f"${value / 1e9:.2f} B"
-
-    if value >= 1e6:
-        return f"${value / 1e6:.2f} M"
-
-    return f"${value:,.2f}"
-
-
-def percent(value):
-
-    if value is None:
-        return "ناموجود"
-
-    return f"{value:+.2f}%"
-
-
-st.markdown("""
-<div class="hero">
-<h1>📡 CryptoScope AI</h1>
-<p>سامانه هوشمند تحلیل بازار رمزارزها</p>
-</div>
-""", unsafe_allow_html=True)
-
-if st.button("🔄 به‌روزرسانی اطلاعات"):
+st.markdown('<div class="hero"><h1>📡 CryptoScope AI</h1><p>تحلیل آنچین، فاندامنتال، جریان سرمایه و اخبار بازار رمزارز</p></div>',unsafe_allow_html=True)
+if st.button("🔄 دریافت آخرین تحلیل"):
     st.cache_data.clear()
-
 try:
-
-    with st.spinner("در حال دریافت اطلاعات بازار..."):
-
-        market, direction, score, factors, headlines, high = build_report()
-
-    st.markdown(
-        f"""
-        <div class="panel">
-        <h2>جهت کلی بازار: {direction}</h2>
-        <h3>امتیاز بازار: {score if score is not None else "ناموجود"} / 100</h3>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    columns = st.columns(4)
-
-    cards = [
-        ("ارزش کل بازار", money(market.get("market_cap_usd"))),
-        ("حجم معاملات", money(market.get("volume_24h_usd"))),
-        ("تغییر بازار", percent(market.get("market_cap_change_24h_pct"))),
-        ("دامیننس BTC", percent(market.get("btc_dominance")))
-    ]
-
-    for col, (title, value) in zip(columns, cards):
-
-        with col:
-
-            st.markdown(
-                f"""
-                <div class="metric">
-                <div class="metric-title">{title}</div>
-                <div class="metric-value">{value}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-    st.markdown(
-        '<div class="panel"><h3>🪙 ارزهای اصلی بازار</h3></div>',
-        unsafe_allow_html=True
-    )
-
-    coin_rows = []
-
-    for key in ["bitcoin", "ethereum", "cardano", "solana"]:
-
-        coin = market.get("coins", {}).get(key)
-
-        if coin:
-
-            coin_rows.append({
-                "ارز": coin["name"],
-                "نماد": coin["symbol"],
-                "قیمت": coin["price"],
-                "تغییر ۱ ساعت": percent(coin.get("change_1h")),
-                "تغییر ۲۴ ساعت": percent(coin.get("change_24h")),
-                "تغییر ۷ روز": percent(coin.get("change_7d"))
-            })
-
-    if coin_rows:
-        st.dataframe(
-            pd.DataFrame(coin_rows),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    left, right = st.columns(2)
-
-    with left:
-
-        st.markdown(
-            '<div class="panel"><h3>📊 عوامل تحلیل بازار</h3></div>',
-            unsafe_allow_html=True
-        )
-
-        for name, value, detail in factors:
-
-            if value is None:
-                status = "⚪ بدون داده"
-            elif value >= 20:
-                status = f"🟢 مثبت {value}"
-            elif value <= -20:
-                status = f"🔴 منفی {value}"
-            else:
-                status = f"🟡 خنثی {value}"
-
-            st.markdown(
-                f"""
-                <div class="metric">
-                <b>{name}</b>
-                <p>{status}</p>
-                <small>{detail}</small>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-    with right:
-
-        st.markdown(
-            '<div class="panel"><h3>😨 شاخص ترس و طمع</h3></div>',
-            unsafe_allow_html=True
-        )
-
-        fg = market.get("fear_greed")
-
-        if fg:
-
-            st.metric(
-                "Fear & Greed",
-                f'{fg["value"]}/100',
-                fg["label"]
-            )
-
-            st.progress(fg["value"])
-
-        else:
-
-            st.info("اطلاعات موجود نیست.")
-
-        tech = market.get("technical", {})
-
-        st.markdown(
-            '<div class="panel"><h3>📈 تحلیل تکنیکال BTC</h3></div>',
-            unsafe_allow_html=True
-        )
-
-        st.metric("RSI 14", tech.get("rsi_14", "ناموجود"))
-
-        st.metric(
-            "میانگین ۷ روزه",
-            money(tech.get("sma_7"))
-        )
-
-    st.markdown(
-        '<div class="panel"><h3>🚨 اخبار مهم بازار</h3></div>',
-        unsafe_allow_html=True
-    )
-
-    if headlines:
-
-        for item in headlines[:15]:
-
-            st.markdown(
-                f'**{item["score"]}/100 — {item["title"]}**'
-            )
-
-            st.markdown(
-                f'[مشاهده خبر]({item["url"]})'
-            )
-
+    with st.spinner("در حال دریافت داده‌ها و ساخت تحلیل..."):
+        report=build_report()
+    market=report.get("market") or {}
+    glob=market.get("global") or {}
+    st.markdown(f'<div class="panel"><h2>جهت بازار: {report["direction"]}</h2><h3>امتیاز: {report["score"] if report["score"] is not None else "ناموجود"} از ۱۰۰</h3><p>اطمینان: {report["confidence"]}</p><p>{report["horizon"]}</p></div>',unsafe_allow_html=True)
+    cards=[("ارزش کل بازار",money(glob.get("market_cap"))),("حجم ۲۴ ساعته",money(glob.get("volume_24h"))),("تغییر ارزش بازار",pct(glob.get("market_cap_change_24h"))),("دامیننس BTC",pct(glob.get("btc_dominance")))]
+    cols=st.columns(4)
+    for c,(name,value) in zip(cols,cards):
+        with c: st.markdown(f'<div class="metric"><div class="metric-title">{name}</div><div class="metric-value">{value}</div></div>',unsafe_allow_html=True)
+    st.subheader("ارزهای اصلی")
+    coin_rows=[]
+    for key in ("bitcoin","ethereum","solana"):
+        coin=(market.get("coins") or {}).get(key)
+        if coin:coin_rows.append({"ارز":coin.get("name"),"قیمت":money(coin.get("price")),"تغییر ۲۴ ساعت":pct(coin.get("change_24h")),"تغییر ۷ روز":pct(coin.get("change_7d"))})
+    if coin_rows:st.dataframe(pd.DataFrame(coin_rows),use_container_width=True,hide_index=True)
+    st.subheader("شاخص‌های تحلیل")
+    for f in report.get("factors",[]):
+        st.markdown(f'**{f["name"]}** — امتیاز: {f["score"] if f["score"] is not None else "بدون داده"}')
+        st.write(f["detail"])
+    a,b=st.columns(2)
+    with a:
+        st.subheader("ترس و طمع")
+        fg=market.get("fear_greed")
+        if fg:st.metric("Fear & Greed",f'{fg["value"]}/100',fg.get("interpretation",fg.get("label","")))
+        else:st.info("داده ترس و طمع در دسترس نیست.")
+        st.subheader("عرضه استیبل‌کوین‌ها")
+        stable=market.get("stablecoins")
+        if stable:st.write(f'۷ روز: {pct(stable.get("change_7d"))} | ۳۰ روز: {pct(stable.get("change_30d"))}')
+        else:st.info("داده عرضه استیبل‌کوین در دسترس نیست.")
+    with b:
+        st.subheader("TVL دیفای")
+        tvl=market.get("defi_tvl")
+        if tvl:st.write(f'۷ روز: {pct(tvl.get("change_7d"))} | ۳۰ روز: {pct(tvl.get("change_30d"))}')
+        else:st.info("داده TVL در دسترس نیست.")
+        st.subheader("جریان ETF")
+        etf=market.get("etf_flows") or {}
+        if etf.get("available"):
+            for sym,flow in (etf.get("assets") or {}).items():
+                if flow:st.write(f'{sym}: روزانه {flow["daily_usd_m"]:+.1f}M USD | هفت‌روزه {flow["weekly_usd_m"]:+.1f}M USD')
+        else:st.info("جریان ETF دریافت نشده است.")
+    st.subheader("آنچین بیت‌کوین")
+    for name,key in (("تراکنش‌ها","n-transactions"),("هش‌ریت","hash-rate")):
+        item=(report.get("network") or {}).get(key)
+        st.write(f'{name}: تغییر ۷ روزه {pct(item.get("change_7d"))}' if item else f'{name}: داده موجود نیست')
+    st.subheader("خبرهای مهم ۴۸ ساعت اخیر")
+    news=report.get("news") or {}
+    if not news.get("available"):st.warning("دریافت از منابع خبری ناموفق بود؛ نبود خبر مهم قابل نتیجه‌گیری نیست.")
+    elif report.get("important_news"):
+        for item in report["important_news"]:
+            st.markdown(f'**{item["level"]} | {item["category"]} | {item["title"]}**')
+            st.caption(item.get("source",""))
+            st.markdown(f'[مشاهده خبر]({item["url"]})')
             st.divider()
-
-    else:
-
-        st.info("خبری دریافت نشد.")
-
+    else:st.info("خبر مهمی با معیارهای فعلی شناسایی نشد.")
     if market.get("errors"):
-
-        with st.expander("⚠️ خطاهای دریافت اطلاعات"):
-
-            for error in market["errors"]:
-                st.write(error)
-
-except Exception as error:
-
-    st.error(f"خطا در اجرای تحلیل: {error}")
-
-st.caption("CryptoScope AI | این اطلاعات توصیه خرید یا فروش نیست.")
+        with st.expander("خطاها و منابع ناموفق"):
+            for err in market["errors"]:st.write("• "+str(err))
+except Exception as exc:
+    st.error("اجرای تحلیل با خطا مواجه شد.")
+    st.exception(exc)
+st.caption("CryptoScope AI | تحلیل سناریویی است و توصیه خرید یا فروش محسوب نمی‌شود.")
