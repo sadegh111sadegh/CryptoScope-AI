@@ -31,7 +31,8 @@ try:
         report=build_report()
     market=report.get("market") or {}
     glob=market.get("global") or {}
-    st.markdown(f'<div class="panel"><h2>جهت بازار: {report["direction"]}</h2><h3>امتیاز: {report["score"] if report["score"] is not None else "ناموجود"} از ۱۰۰</h3><p>اطمینان: {report["confidence"]}</p><p>{report["horizon"]}</p></div>',unsafe_allow_html=True)
+    quality=market.get("data_quality") or {}
+    st.markdown(f'<div class="panel"><h2>جهت بازار: {report["direction"]}</h2><h3>امتیاز: {report["score"] if report["score"] is not None else "ناموجود"} از ۱۰۰</h3><p>اطمینان: {report["confidence"]} | شاخص معتبر: {quality.get("available_factors", 0)} از {quality.get("total_factors", 0)}</p><p>{report["horizon"]}</p></div>',unsafe_allow_html=True)
     cards=[("ارزش کل بازار",money(glob.get("market_cap"))),("حجم ۲۴ ساعته",money(glob.get("volume_24h"))),("تغییر ارزش بازار",pct(glob.get("market_cap_change_24h"))),("دامیننس BTC",pct(glob.get("btc_dominance")))]
     cols=st.columns(4)
     for c,(name,value) in zip(cols,cards):
@@ -64,15 +65,20 @@ try:
         st.subheader("جریان ETF")
         etf=market.get("etf_flows") or {}
         if etf.get("available"):
+            st.caption(f'منبع: {etf.get("source", "نامشخص")} | به‌روزرسانی: {etf.get("updated_at", "نامشخص")}')
             for sym,flow in (etf.get("assets") or {}).items():
-                if flow:st.write(f'{sym}: روزانه {flow["daily_usd_m"]:+.1f}M USD | هفت‌روزه {flow["weekly_usd_m"]:+.1f}M USD')
+                if flow:st.write(f'{sym} ({flow.get("date", "بدون تاریخ")}): روزانه {flow["daily_usd_m"]:+.1f}M USD | هفت‌روزه {flow["weekly_usd_m"]:+.1f}M USD')
         else:st.info("جریان ETF دریافت نشده است.")
     st.subheader("آنچین بیت‌کوین")
     for name,key in (("تراکنش‌ها","n-transactions"),("هش‌ریت","hash-rate")):
         item=(report.get("network") or {}).get(key)
-        st.write(f'{name}: تغییر ۷ روزه {pct(item.get("change_7d"))}' if item else f'{name}: داده موجود نیست')
+        if item:
+            st.write(f'{name}: تغییر ۷ روزه {pct(item.get("change_7d"))} | آخرین داده: {item.get("latest", "ناموجود")} | تاریخ: {item.get("latest_date", "نامشخص")}')
+        else:
+            st.write(f'{name}: داده موجود نیست')
     st.subheader("خبرهای مهم ۴۸ ساعت اخیر")
     news=report.get("news") or {}
+    st.caption(f'منابع خبری پاسخ‌داده: {news.get("feeds_ok", 0)} از {news.get("feeds_total", 0)} | بررسی: {news.get("checked_at", "نامشخص")}')
     if not news.get("available"):st.warning("دریافت از منابع خبری ناموفق بود؛ نبود خبر مهم قابل نتیجه‌گیری نیست.")
     elif report.get("important_news"):
         for item in report["important_news"]:
