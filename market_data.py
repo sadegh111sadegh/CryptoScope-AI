@@ -1,117 +1,117 @@
-
 import requests
 from datetime import datetime, timezone
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-S = requests.Session()
-S.headers.update({"User-Agent": "CryptoScope-AI/2.0"})
-TIMEOUT = 20
-
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": "CryptoScope-AI/3.0"})
+_retry = Retry(total=3, connect=3, read=3, backoff_factor=0.7, status_forcelist=(429, 500, 502, 503, 504), allowed_methods=frozenset(["GET"]))
+SESSION.mount("https://", HTTPAdapter(max_retries=_retry))
+TIMEOUT = 25
 
 def get_json(url, params=None):
-    r = S.get(url, params=params, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r.json()
-
+    response = SESSION.get(url, params=params, timeout=TIMEOUT)
+    response.raise_for_status()
+    return response.json()
 
 def pct_change(old, new):
-    if old in (None, 0) or new is None:
+    try:
+        old, new = float(old), float(new)
+        if old == 0:
+            return None
+        return round((new - old) / abs(old) * 100, 3)
+    except (TypeError, ValueError):
         return None
-    return round((new - old) / abs(old) * 100, 2)
 
+def _stable_total(row):
+    value = (row.get("totalCirculatingUSD") or {}).get("peggedUSD")
+    if isinstance(value, dict):
+        value = value.get("circulating")
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+def _series_snapshot(rows, key):
+    rows = sorted(rows, key=lambda item: item.get("date", 0))
+    values = []
+    for row in rows:
+        try:
+            values.append(float(row.get(key)))
+        except (TypeError, ValueError):
+            values.append(None)
+    valid = [v for v in values if v is not None]
+    if len(valid) < 8:
+        return None
+    return {
+        "latest": valid[-1],
+        "change_7d": pct_change(valid[-8], valid[-1]),
+        "change_30d": pct_change(valid[-31], valid[-1]) if len(valid) >= 31 else None,
+    }
 
 def get_market_snapshot():
     data = {"errors": [], "coins": {}, "collected_at": datetime.now(timezone.utc).isoformat()}
-
-    # Global crypto market and asset data
     try:
         g = get_json("https://api.coingecko.com/api/v3/global")["data"]
         data["global"] = {
-            "market_cap": g["total_market_cap"]["usd"],
-            "volume_24h": g["total_volume"]["usd"],
-            "btc_dominance": g["market_cap_percentage"]["btc"],
-            "market_cap_change_24h": g.get("market_cap_change_percentage_24h_usd")
+            "market_cap": g.get("total_market_cap", {}).get("usd"),
+            "volume_24h": g.get("total_volume", {}).get("usd"),
+            "btc_dominance": g.get("market_cap_percentage", {}).get("btc"),
+            "market_cap_change_24h": g.get("market_cap_change_percentage_24h_usd"),
         }
-    except Exception as e:
-        data["errors"].append("CoinGecko global: " + str(e))
-
+    except Exception as exc:
+        data["errors"].append("CoinGecko global: " + str(exc))
     try:
-        coins = get_json(
-            "https://api.coingecko.com/api/v3/coins/markets",
-            {
-                "vs_currency": "usd",
-                "ids": "bitcoin,ethereum,solana",
-                "price_change_percentage": "24h,7d"
+        coins = get_json("https://api.coingecko.com/api/v3/coins/markets", {
+            "vs_currency": "usd", "ids": "bitcoin,ethereum,solana",
+            "price_change_percentage": "24h,7d", "order": "market_cap_desc",
+            "per_page": 10, "page": 1, "sparkline": "false",
+        })
+        for coin in coins:
+            data["coins"][coin["id"]] = {
+                "name": coin.get("name"), "price": coin.get("current_price"),
+                "change_24h": coin.get("price_change_percentage_24h"),
+                "change_7d": coin.get("price_change_percentage_7d_in_currency"),
             }
-        )
-        for c in coins:
-            data["coins"][c["id"]] = {
-                "name": c["name"],
-                "price": c.get("current_price"),
-                "change_24h": c.get("price_change_percentage_24h"),
-                "change_7d": c.get("price_change_percentage_7d_in_currency")
-            }
-    except Exception as e:
-        data["errors"].append("CoinGecko coins: " + str(e))
-
-    # Fear and Greed
+    except Exception as exc:
+        data["errors"].append("CoinGecko assets: " + str(exc))
     try:
-        fg = get_json("https://api.alternative.me/fng/?limit=1")["data"][0]
-        data["fear_greed"] = {
-            "value": int(fg["value"]),
-            "label": fg["value_classification"]
-        }
-    except Exception as e:
+        row = get_json("https://api.alternative.me/fng/?limit=1")["data"][0]
+        data["fear_greed"] = {"value": int(row["value"]), "label": row.get("value_classification", "")}
+    except Exception as exc:
         data["fear_greed"] = None
-        data["errors"].append("Fear and Greed: " + str(e))
-
-    # Stablecoin supply: liquidity proxy
+        data["errors"].append("Fear & Greed: " + str(exc))
     try:
         rows = get_json("https://stablecoins.llama.fi/stablecoincharts/all")
-        rows = sorted(rows, key=lambda x: x.get("date", 0))
-        if len(rows) >= 8:
-            latest = rows[-1].get("totalCirculatingUSD", {}).get("peggedUSD")
-            week = rows[-8].get("totalCirculatingUSD", {}).get("peggedUSD")
-            month = rows[-31].get("totalCirculatingUSD", {}).get("peggedUSD") if len(rows) >= 31 else None
+        rows = sorted(rows, key=lambda item: item.get("date", 0))
+        totals = [_stable_total(row) for row in rows]
+        valid = [v for v in totals if v is not None]
+        if len(valid) >= 8:
             data["stablecoins"] = {
-                "latest": latest,
-                "change_7d": pct_change(week, latest),
-                "change_30d": pct_change(month, latest)
+                "latest": valid[-1], "change_7d": pct_change(valid[-8], valid[-1]),
+                "change_30d": pct_change(valid[-31], valid[-1]) if len(valid) >= 31 else None,
             }
-    except Exception as e:
+    except Exception as exc:
         data["stablecoins"] = None
-        data["errors"].append("Stablecoin data: " + str(e))
-
-    # DeFi TVL: capital deployed in DeFi protocols
+        data["errors"].append("Stablecoin supply: " + str(exc))
     try:
-        tvl = get_json("https://api.llama.fi/v2/historicalChainTvl")
-        tvl = sorted(tvl, key=lambda x: x.get("date", 0))
-        if len(tvl) >= 8:
-            latest = tvl[-1].get("tvl")
-            week = tvl[-8].get("tvl")
-            month = tvl[-31].get("tvl") if len(tvl) >= 31 else None
-            data["defi_tvl"] = {
-                "latest": latest,
-                "change_7d": pct_change(week, latest),
-                "change_30d": pct_change(month, latest)
-            }
-    except Exception as e:
+        data["defi_tvl"] = _series_snapshot(get_json("https://api.llama.fi/v2/historicalChainTvl"), "tvl")
+    except Exception as exc:
         data["defi_tvl"] = None
-        data["errors"].append("DeFi TVL: " + str(e))
-
-    # Bitcoin network activity
+        data["errors"].append("DeFi TVL: " + str(exc))
     for chart in ("n-transactions", "hash-rate"):
         try:
-            result = get_json(
-                f"https://api.blockchain.info/charts/{chart}",
-                {"timespan": "30days", "format": "json"}
-            )
-            values = [x["y"] for x in result.get("values", [])]
+            result = get_json("https://api.blockchain.info/charts/" + chart, {"timespan": "30days", "format": "json"})
+            values = []
+            for item in result.get("values", []):
+                try:
+                    values.append(float(item.get("y")))
+                except (TypeError, ValueError):
+                    pass
             if len(values) >= 8:
                 data.setdefault("bitcoin_network", {})[chart] = {
-                    "change_7d": pct_change(values[-8], values[-1]),
-                    "latest": values[-1]
+                    "latest": values[-1], "change_7d": pct_change(values[-8], values[-1]),
                 }
-        except Exception as e:
-            data["errors"].append(f"Bitcoin {chart}: {e}")
-
+        except Exception as exc:
+            data["errors"].append("Bitcoin " + chart + ": " + str(exc))
     return data
