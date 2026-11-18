@@ -88,7 +88,13 @@ def build_messages(report):
                 lines.append(f"• {label}: داده این دارایی منتشر نشده یا دریافت آن ناموفق بوده است.")
         lines.append("  مثبت = ورود خالص پول به ETFها؛ منفی = خروج خالص. داده‌ها مربوط به ETFهای اسپات آمریکا و با تأخیر انتشار روزانه‌اند.")
     else:
-        lines.append("• داده ETF دریافت نشد؛ کلید API رایگان تنظیم نشده یا منبع پاسخ نداده است.")
+        lines.append("• داده ETF دریافت نشد.")
+        etf_errors = [err for err in market.get("errors", []) if str(err).startswith("ETF ")]
+        if etf_errors:
+            for err in etf_errors:
+                lines.append("  علت: " + html.escape(str(err)[:350]))
+        else:
+            lines.append("  علت: جزئیات خطا ثبت نشده است.")
     lines += ["", "⛓️ <b>آنچین و سلامت شبکه بیت‌کوین</b>"]
     network = report.get("network", {})
     tx, hashrate = network.get("n-transactions"), network.get("hash-rate")
