@@ -1,6 +1,6 @@
 import requests
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -66,7 +66,9 @@ def _fetch_etf_flows(data):
             if not valid:
                 raise ValueError("No published flow records")
             latest = valid[-1]
-            recent = valid[-7:]
+            latest_date = datetime.strptime(latest["date"], "%Y-%m-%d").date()
+            week_start = latest_date - timedelta(days=6)
+            recent = [row for row in valid if week_start <= datetime.strptime(row["date"], "%Y-%m-%d").date() <= latest_date]
             result["assets"][symbol] = {
                 "date": latest.get("date"),
                 "daily_usd_m": float(latest["netFlowUsdM"]),
