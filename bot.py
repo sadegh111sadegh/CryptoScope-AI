@@ -95,8 +95,15 @@ def build_messages(report):
                 lines.append("  علت: " + html.escape(str(err)[:350]))
         else:
             lines.append("  علت: جزئیات خطا ثبت نشده است.")
-    lines += ["", "⛓️ <b>وضعیت شبکه بیت‌کوین</b>",
-              "فعلاً داده معتبر کافی برای اعلام تغییرات شبکه نداریم."]
+    lines += ["", "⛓️ <b>وضعیت شبکه بیت‌کوین</b>"]
+    network = report.get("network") or {}
+    for key, label in (("n-transactions", "تعداد تراکنش‌ها"), ("hash-rate", "قدرت محاسباتی شبکه")):
+        item = network.get(key)
+        if item and item.get("change_7d") is not None:
+            lines.append(f"• {label}: در مقایسه با حدود ۷ روز قبل {trend_label(item['change_7d'])}")
+        else:
+            lines.append(f"• {label}: داده معتبر در دسترس نیست")
+    lines.append("افزایش تراکنش به معنی افزایش فعالیت شبکه است، نه لزوماً خرید؛ هش‌ریت بیشتر به امنیت شبکه مربوط است.")
 
     lines += ["", "🧠 <b>تفسیر عوامل اثرگذار</b>"]
     for factor in report["factors"]:
