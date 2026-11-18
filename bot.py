@@ -2,19 +2,19 @@ import html
 from analysis import build_report
 from telegram_bot import send_message
 
-def money(value):
-    if value is None:
-        return "ناموجود"
-    value = float(value)
-    if value >= 1_000_000_000_000:
-        return "$" + f"{value / 1_000_000_000_000:.2f} تریلیون"
-    if value >= 1_000_000_000:
-        return "$" + f"{value / 1_000_000_000:.2f} میلیارد"
-    if value >= 1_000_000:
-        return "$" + f"{value / 1_000_000:.2f} میلیون"
-    return "$" + f"{value:,.0f}"
-
 def pct(value):
+    return "نامشخص" if value is None else f"{float(value):+.1f}٪"
+
+def flow_label(value):
+    if value is None:
+        return "نامشخص"
+    amount = float(value)
+    if abs(amount) < 1:
+        return "تقریباً بدون ورود یا خروج"
+    strength = "زیاد" if abs(amount) >= 100 else "متوسط" if abs(amount) >= 25 else "کم"
+    return ("ورود پول " if amount > 0 else "خروج پول ") + strength
+
+def dominance(value):
     return "ناموجود" if value is None else f"{float(value):+.2f}٪"
 
 def dominance(value):
@@ -45,11 +45,8 @@ def build_messages(report):
         f"🧭 <b>جمع‌بندی:</b> {html.escape(report['direction'])}",
         f"🔎 <b>اطمینان:</b> {report['confidence']} | بر پایه {usable} شاخص قابل استفاده",
         "", "💹 <b>نمای کلی بازار</b>",
-        f"• ارزش کل بازار: {money(global_data.get('market_cap'))}",
-        f"• تغییر ارزش بازار در ۲۴ ساعت: {pct(global_data.get('market_cap_change_24h'))}",
-        f"• حجم معاملات ۲۴ ساعت: {money(global_data.get('volume_24h'))}",
-        f"• سهم بیت‌کوین از بازار: {dominance(global_data.get('btc_dominance'))}",
-        f"• تغییر قیمت BTC: روزانه {pct(btc.get('change_24h'))} | هفتگی {pct(btc.get('change_7d'))}",
+        f"• وضعیت کل بازار در ۲۴ ساعت: {pct(global_data.get('market_cap_change_24h'))}",
+        f"• قیمت بیت‌کوین: امروز {pct(btc.get('change_24h'))} | این هفته {pct(btc.get('change_7d'))}",
     ]
     if fg:
         value = fg["value"]
@@ -62,13 +59,11 @@ def build_messages(report):
 
     lines += ["", "🌊 <b>نقدینگی و سرمایه در اکوسیستم</b>"]
     if stable:
-        lines.append(f"• عرضه استیبل‌کوین‌ها: ۷ روز {pct(stable.get('change_7d'))} | ۳۰ روز {pct(stable.get('change_30d'))}")
-        lines.append("  رشد عرضه می‌تواند ظرفیت نقدینگی را بیشتر کند؛ لزوماً به معنی ورود پول به صرافی‌ها نیست.")
+        lines.append(f"• پول آماده ورود به بازار (استیبل‌کوین‌ها): {pct(stable.get('change_7d'))} در هفته اخیر")
     else:
         lines.append("• عرضه استیبل‌کوین‌ها: داده در دسترس نیست")
     if tvl:
-        lines.append(f"• TVL دیفای: ۷ روز {pct(tvl.get('change_7d'))} | ۳۰ روز {pct(tvl.get('change_30d'))}")
-        lines.append("  تغییر TVL هم از ورود سرمایه و هم از تغییر قیمت دارایی‌ها اثر می‌گیرد.")
+        lines.append(f"• سرمایه قفل‌شده در دیفای: {pct(tvl.get('change_7d'))} در هفته اخیر")
     else:
         lines.append("• TVL دیفای: داده در دسترس نیست")
 
@@ -80,13 +75,10 @@ def build_messages(report):
             if flow:
                 daily = float(flow["daily_usd_m"])
                 weekly = float(flow["weekly_usd_m"])
-                daily_text = ("+" if daily >= 0 else "-") + "$" + f"{abs(daily):,.1f}M"
-                weekly_text = ("+" if weekly >= 0 else "-") + "$" + f"{abs(weekly):,.1f}M"
-                lines.append(f"• {label}: روز {daily_text} | مجموع ۷ روز اخیر {weekly_text}")
-                lines.append(f"  آخرین روز داده: {flow.get('date') or 'نامشخص'}")
+                lines.append(f"• {label}: امروز {flow_label(daily)} | این هفته {flow_label(weekly)}")
             else:
                 lines.append(f"• {label}: داده این دارایی منتشر نشده یا دریافت آن ناموفق بوده است.")
-        lines.append("  مثبت = ورود خالص پول به ETFها؛ منفی = خروج خالص. داده‌ها مربوط به ETFهای اسپات آمریکا و با تأخیر انتشار روزانه‌اند.")
+        lines.append("ورود پول یعنی تقاضای بیشتر؛ خروج پول یعنی فشار فروش احتمالی. داده‌ها مربوط به ETFهای آمریکا هستند.")
     else:
         lines.append("• داده ETF دریافت نشد.")
         etf_errors = [err for err in market.get("errors", []) if str(err).startswith("ETF ")]
@@ -95,8 +87,8 @@ def build_messages(report):
                 lines.append("  علت: " + html.escape(str(err)[:350]))
         else:
             lines.append("  علت: جزئیات خطا ثبت نشده است.")
-    lines += ["", "⛓️ <b>آنچین و سلامت شبکه بیت‌کوین</b>",
-              "⚠️ داده‌های تغییر ۷روزه تراکنش‌ها و هش‌ریت فعلاً از گزارش حذف شده‌اند؛ محاسبه قبلی قابل اتکا نبود و تا اعتبارسنجی مستقل، عددی نمایش داده نمی‌شود."]
+    lines += ["", "⛓️ <b>وضعیت شبکه بیت‌کوین</b>",
+              "فعلاً داده معتبر کافی برای اعلام تغییرات شبکه نداریم."]
 
     lines += ["", "🧠 <b>تفسیر عوامل اثرگذار</b>"]
     for factor in report["factors"]:
@@ -108,14 +100,12 @@ def build_messages(report):
     if not news.get("available"):
         lines.append("⚠️ دریافت خبر از منابع ناموفق بود؛ درباره نبود خبر مهم نمی‌توان نتیجه‌گیری کرد.")
     elif report["important_news"]:
-        for item in report["important_news"][:6]:
+        for item in report["important_news"][:4]:
             lines.append(f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\n{safe_link(item)}\n<i>{html.escape(item['source'])}</i>")
     else:
         lines.append("منابع خبری پاسخ داده‌اند، اما خبر مهمی مطابق معیارهای این گزارش شناسایی نشد.")
 
-    lines += ["", "📌 <b>محدودیت داده جریان پول</b>",
-              "جریان ETF از داده خالص روزانه ETFهای اسپات آمریکا اندازه‌گیری می‌شود. ورود/خروج صرافی‌ها و خریدوفروش نهنگ‌ها هنوز مستقیماً اندازه‌گیری نمی‌شوند؛ رشد استیبل‌کوین یا TVL نیز معادل ورود قطعی پول نیست.",
-              "", "⚠️ این گزارش سناریوی تحلیلی است، نه پیش‌بینی قطعی یا توصیه خریدوفروش."]
+    lines += ["", "⚠️ این تحلیل احتمالی است، نه پیش‌بینی قطعی یا توصیه خریدوفروش."]
     if market.get("errors"):
         lines += ["", f"ℹ️ تعداد منابع داده ناموفق: {len(market['errors'])}؛ بخش‌های بدون داده در گزارش مشخص شده‌اند."]
 
