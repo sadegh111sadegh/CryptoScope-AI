@@ -1,70 +1,93 @@
+
 import requests
+from datetime import datetime, timezone
 
-GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
+URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 
-QUERIES = [
-    '(war OR invasion OR missile OR airstrike OR "military attack")',
-    '("Strait of Hormuz" OR sanctions OR "oil infrastructure")',
-    '("crypto reserve" OR cryptocurrency OR Bitcoin OR Ethereum)'
+QUERY = (
+    '(war OR invasion OR airstrike OR missile OR "military attack" '
+    'OR "strait of hormuz" OR sanctions OR "oil supply" '
+    'OR "Federal Reserve" OR "interest rate" OR inflation '
+    'OR "Bitcoin ETF" OR crypto regulation OR "SEC crypto" '
+    'OR "stablecoin" OR "bitcoin reserve")'
+)
+
+CRITICAL = [
+    "invasion", "declares war", "war begins", "airstrike",
+    "missile strike", "military attack", "nuclear", "strait of hormuz",
+    "oil facility", "oil supply disruption", "emergency sanctions"
 ]
 
-def score_headline(title):
-    title = title.lower()
-
-    rules = [
-        (100, ["declares war", "invasion", "war begins"]),
-        (90, ["airstrike", "missile strike", "strait of hormuz"]),
-        (75, ["military attack", "sanctions", "oil facility"]),
-        (45, ["ceasefire", "peace talks", "threatens"]),
-        (20, ["interest rate", "central bank", "inflation"])
-    ]
-
-    for score, words in rules:
-        if any(word in title for word in words):
-            return score
-
-    return 10
+IMPORTANT = [
+    "sanctions", "ceasefire", "peace talks", "federal reserve",
+    "interest rate", "rate cut", "rate hike", "inflation",
+    "bitcoin etf", "crypto regulation", "bitcoin reserve",
+    "stablecoin", "exchange collapse", "bank failure"
+]
 
 
-def fetch_news(max_records=20):
-    articles = {}
+def classify(title):
+    t = title.lower()
 
-    for query in QUERIES:
-        params = {
-            "query": query,
-            "mode": "ArtList",
-            "format": "json",
-            "sort": "DateDesc",
-            "maxrecords": max_records
-        }
+    if any(word in t for word in CRITICAL):
+        return 95, "بحرانی"
+    if any(word in t for word in IMPORTANT):
+        return 70, "مهم"
+    return 35, "عادی"
 
-        try:
-            response = requests.get(
-                GDELT_URL,
-                params=params,
-                timeout=25
-            )
-            response.raise_for_status()
 
-            for item in response.json().get("articles", []):
-                url = item.get("url")
-                if not url:
-                    continue
+def fetch_news(max_records=30):
+    result = {
+        "items": [],
+        "available": False,
+        "error": None,
+        "checked_at": datetime.now(timezone.utc).isoformat()
+    }
 
-                title = item.get("title", "")
-                articles[url] = {
-                    "title": title,
-                    "url": url,
-                    "source": item.get("domain", ""),
-                    "published": item.get("seendate", ""),
-                    "score": score_headline(title)
-                }
+    try:
+        response = requests.get(
+            URL,
+            params={
+                "query": QUERY,
+                "mode": "ArtList",
+                "format": "json",
+                "sort": "DateDesc",
+                "maxrecords": max_records,
+                "timespan": "48h"
+            },
+            timeout=30
+        )
+        response.raise_for_status()
 
-        except Exception as error:
-            print("News error:", error)
+        articles = response.json().get("articles", [])
+        result["available"] = True
 
-    return sorted(
-        articles.values(),
-        key=lambda x: x["score"],
-        reverse=True
-    )
+        seen = set()
+        for item in articles:
+            title = item.get("title", "").strip()
+            link = item.get("url", "")
+
+            if not title or not link or link in seen:
+                continue
+
+            seen.add(link)
+            score, level = classify(title)
+
+            result["items"].append({
+                "title": title,
+                "url": link,
+                "source": item.get("domain", "نامشخص"),
+                "published": item.get("seendate", ""),
+                "score": score,
+                "level": level
+            })
+
+        result["items"].sort(
+            key=lambda x: (x["score"], x["published"]),
+            reverse=True
+        )
+
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
