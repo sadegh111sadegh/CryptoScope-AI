@@ -89,7 +89,11 @@ def _indicators(candles):
             score += 8
 
     if macd_hist is not None:
-        score += 20 if macd_hist > 0 else -20 if macd_hist < 0 else 0
+        # Ignore floating-point noise around a zero histogram.
+        if macd_hist > 1e-8:
+            score += 20
+        elif macd_hist < -1e-8:
+            score -= 20
 
     if volume_ratio is not None and volume_ratio >= 1.5:
         score += 10 if closes[-1] > closes[-2] else -10 if closes[-1] < closes[-2] else 0
