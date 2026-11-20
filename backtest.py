@@ -182,7 +182,11 @@ def run_backtest(candles, initial_balance=10000.0, fee_rate=0.001, slippage_rate
     gross_profit = sum(trade["pnl"] for trade in wins)
     gross_loss = abs(sum(trade["pnl"] for trade in losses))
     first_close, last_close = candles[0]["close"], candles[-1]["close"]
-    buy_hold = initial_balance * (last_close / first_close) if first_close else initial_balance
+    if first_close:
+        buy_hold_units = initial_balance / (first_close * (1 + slippage_rate) * (1 + fee_rate))
+        buy_hold = buy_hold_units * last_close * (1 - slippage_rate) * (1 - fee_rate)
+    else:
+        buy_hold = initial_balance
     start_ts = candles[0].get("open_time")
     end_ts = candles[-1].get("close_time")
     return {
@@ -197,6 +201,7 @@ def run_backtest(candles, initial_balance=10000.0, fee_rate=0.001, slippage_rate
         "return_pct": (final_equity / initial_balance - 1) * 100,
         "buy_hold_return_pct": (buy_hold / initial_balance - 1) * 100,
         "max_drawdown_pct": max_drawdown,
+        "max_drawdown_basis": "close-to-close equity",
         "trades": len(trades),
         "win_rate_pct": len(wins) / len(trades) * 100 if trades else 0.0,
         "profit_factor": gross_profit / gross_loss if gross_loss else (None if not gross_profit else float("inf")),
