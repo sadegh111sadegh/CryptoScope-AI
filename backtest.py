@@ -91,16 +91,18 @@ def run_backtest(candles, initial_balance=10000.0, fee_rate=0.001, slippage_rate
             equity = position["quantity"] * candle["close"]
         equity_curve.append({"time": candle.get("close_time", i), "equity": equity})
 
+        current_ema50 = _ema(closes, 50) if len(closes) >= 50 else None
         if position:
             stop_hit = candle["low"] <= position["stop"]
             target_hit = candle["high"] >= position["target"]
             exit_reason = None
             raw_exit = None
             if stop_hit:
-                raw_exit, exit_reason = position["stop"], "stop"
+                # A downside gap through the stop fills at the worse candle open.
+                raw_exit, exit_reason = min(position["stop"], candle["open"]), "stop"
             elif target_hit:
                 raw_exit, exit_reason = position["target"], "target"
-            elif i > position["entry_index"] and closes[-1] < position["ema50_at_signal"]:
+            elif i > position["entry_index"] and current_ema50 is not None and closes[-1] < current_ema50:
                 raw_exit, exit_reason = candle["close"], "ema_exit"
 
             if raw_exit is not None:
