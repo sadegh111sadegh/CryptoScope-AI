@@ -54,6 +54,7 @@ class AnalysisTests(unittest.TestCase):
         self.assertIn("داده کافی", report["horizon"])
         self.assertTrue(all(item["score"] is None for item in report["factors"]))
 
+    @patch("analysis.analyze_market", return_value={"available": False, "assets": {}})
     @patch("analysis.fetch_news", return_value={"items": [], "available": True})
     @patch("analysis.get_market_snapshot")
     def test_news_is_filtered_by_importance(self, get_market, _news, _technical):
