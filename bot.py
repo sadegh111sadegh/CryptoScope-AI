@@ -108,6 +108,7 @@ def build_messages(report):
     lines += ["", "📐 <b>تحلیل تکنیکال چندتایم‌فریمی</b>"]
     technical = report.get("technical") or {}
     if technical.get("available"):
+        daily_setups = []
         for asset_id in ("bitcoin", "ethereum", "solana"):
             asset = (technical.get("assets") or {}).get(asset_id) or {}
             if asset.get("score") is None:
@@ -126,6 +127,18 @@ def build_messages(report):
                     f"  ◦ {interval}: {html.escape(item.get('signal', ''))} | "
                     f"RSI {rsi_text} | EMA20 {item.get('ema20', 0):,.2f}"
                 )
+            daily = (asset.get("timeframes") or {}).get("1d") or {}
+            setup = daily.get("entry_setup")
+            if setup:
+                daily_setups.append(
+                    f"• <b>{html.escape(asset.get('name', asset_id))}</b> | "
+                    f"ورود: {setup['entry']:,.4f} | "
+                    f"حد ضرر: {setup['stop_loss']:,.4f} | "
+                    f"هدف: {setup['take_profit']:,.4f} | "
+                    f"ریسک به بازده: {setup['risk_reward']}"
+                )
+        if daily_setups:
+            lines += ["", "🎯 <b>موقعیت ورود روزانه</b>"] + daily_setups
         lines.append("تایم‌فریم روزانه وزن بیشتری دارد؛ کندل باز در محاسبه لحاظ نمی‌شود.")
     else:
         lines.append("داده تکنیکال کافی دریافت نشد؛ از ساخت سیگنال بر اساس داده ناقص خودداری شد.")
