@@ -49,6 +49,48 @@ class BotReportTests(unittest.TestCase):
         self.assertIn("خبرهای مهم ۴۸ ساعت اخیر", message)
         self.assertIn("نمونه خبر مهم درباره نرخ بهره", message)
 
+
+    def test_daily_trade_levels_are_shown_only_when_setup_exists(self):
+        report = sample_report()
+        report["technical"] = {
+            "available": True,
+            "assets": {
+                "bitcoin": {
+                    "name": "بیت‌کوین",
+                    "score": 70,
+                    "signal": "تمایل صعودی",
+                    "timeframes": {
+                        "1d": {
+                            "signal": "تمایل صعودی", "rsi14": 60.0,
+                            "ema20": 115.0,
+                            "entry_setup": {
+                                "entry": 120.0, "stop_loss": 114.0,
+                                "take_profit": 132.0, "risk_reward": "1:2",
+                            },
+                        }
+                    },
+                }
+            },
+        }
+        message = "\\n".join(build_messages(report))
+        self.assertIn("موقعیت ورود روزانه", message)
+        self.assertIn("حد ضرر: 114.0000", message)
+        self.assertIn("هدف: 132.0000", message)
+
+    def test_daily_trade_section_is_hidden_without_setup(self):
+        report = sample_report()
+        report["technical"] = {
+            "available": True,
+            "assets": {
+                "bitcoin": {
+                    "name": "بیت‌کوین", "score": 10, "signal": "خنثی",
+                    "timeframes": {"1d": {"signal": "خنثی", "entry_setup": None}},
+                }
+            },
+        }
+        message = "\\n".join(build_messages(report))
+        self.assertNotIn("موقعیت ورود روزانه", message)
+
     def test_generic_trading_disclaimer_is_removed(self):
         message = "\n".join(build_messages(sample_report()))
         self.assertNotIn("توصیه خریدوفروش", message)
