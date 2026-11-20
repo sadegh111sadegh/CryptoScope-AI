@@ -115,6 +115,40 @@ def _indicators(candles):
     }
 
 
+def _daily_entry_setup(indicators):
+    """Return a conservative long setup only when the completed daily trend aligns."""
+    entry = indicators.get("price")
+    atr = indicators.get("atr14")
+    ema20 = indicators.get("ema20")
+    ema50 = indicators.get("ema50")
+    ema200 = indicators.get("ema200")
+    rsi = indicators.get("rsi14")
+    macd_hist = indicators.get("macd_histogram")
+    score = indicators.get("score")
+
+    # Avoid chasing overbought candles or entering against the daily trend.
+    if not all(value is not None for value in (
+        entry, atr, ema20, ema50, ema200, rsi, macd_hist, score
+    )):
+        return None
+    if not (score >= 50 and entry > ema20 > ema50 > ema200):
+        return None
+    if not (50 <= rsi <= 68 and macd_hist > 0 and atr > 0):
+        return None
+
+    stop_loss = entry - (1.5 * atr)
+    risk = entry - stop_loss
+    if stop_loss <= 0 or risk <= 0:
+        return None
+    return {
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "take_profit": entry + (2 * risk),
+        "risk_reward": "1:2",
+        "basis": "daily_close_atr",
+    }
+
+
 def analyze_market():
     """Return per-asset, per-timeframe indicators and weighted consensus."""
     result = {"available": False, "assets": {}, "source": "Binance Spot"}
@@ -137,6 +171,8 @@ def analyze_market():
                 } for row in rows]
                 indicators = _indicators(candles)
                 indicators["weight"] = weight
+                if interval == "1d":
+                    indicators["entry_setup"] = _daily_entry_setup(indicators)
                 timeframes[interval] = indicators
             except Exception as exc:
                 errors.append(interval + ": " + str(exc))
