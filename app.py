@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from analysis import build_report
+from backtest import run_market_backtest
 
 st.set_page_config(page_title="CryptoScope AI", page_icon="📡", layout="wide")
 st.markdown("""
@@ -69,6 +70,50 @@ try:
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
         st.info("داده تکنیکال کافی از صرافی دریافت نشد؛ تحلیل تکنیکال موقتاً در دسترس نیست.")
+
+    st.subheader("بک‌تست استراتژی تاریخی")
+    st.caption("این آزمایش روی کندل‌های بسته‌شده انجام می‌شود؛ ورود در بازشدن کندل بعدی است و کارمزد و لغزش قیمت لحاظ می‌شوند.")
+    bt1, bt2, bt3 = st.columns(3)
+    with bt1:
+        bt_symbol = st.selectbox("دارایی", ["BTCUSDT", "ETHUSDT", "SOLUSDT"], key="bt_symbol")
+    with bt2:
+        bt_interval = st.selectbox("تایم‌فریم", ["1h", "4h", "1d"], index=1, key="bt_interval")
+    with bt3:
+        bt_fee = st.number_input("کارمزد هر سمت (%)", min_value=0.0, max_value=1.0, value=0.1, step=0.01, key="bt_fee")
+    if st.button("اجرای بک‌تست", key="run_backtest"):
+        try:
+            with st.spinner("دریافت کندل‌های تاریخی و اجرای بک‌تست..."):
+                bt = run_market_backtest(
+                    symbol=bt_symbol,
+                    interval=bt_interval,
+                    limit=1000,
+                    fee_rate=bt_fee / 100,
+                    slippage_rate=0.05 / 100,
+                )
+            st.markdown(f"**{bt_symbol} | {bt_interval} | {bt['candles']} کندل بسته‌شده**")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("بازده استراتژی", f"{bt['return_pct']:+.2f}%")
+            m2.metric("بازده خرید و نگهداری", f"{bt['buy_hold_return_pct']:+.2f}%")
+            m3.metric("بیشترین افت سرمایه", f"{bt['max_drawdown_pct']:.2f}%")
+            m4.metric("تعداد معاملات", str(bt["trades"]))
+            m5, m6, m7 = st.columns(3)
+            m5.metric("درصد معاملات سودده", f"{bt['win_rate_pct']:.1f}%")
+            pf = bt["profit_factor"]
+            m6.metric("Profit Factor", "∞" if pf == float("inf") else f"{pf:.2f}" if pf is not None else "—")
+            m7.metric("سرمایه نهایی", money(bt["final_balance"]))
+            curve = pd.DataFrame(bt["equity_curve"])
+            if not curve.empty:
+                curve["زمان"] = pd.to_datetime(curve["time"], unit="ms", utc=True)
+                st.line_chart(curve.set_index("زمان")["equity"])
+            if bt["trades_detail"]:
+                trades_df = pd.DataFrame(bt["trades_detail"])
+                trades_df["نتیجه"] = trades_df["pnl"].map(lambda x: "سود" if x > 0 else "ضرر" if x < 0 else "سر به سر")
+                st.dataframe(trades_df[["entry_price", "exit_price", "pnl", "return_pct", "reason", "نتیجه"]], use_container_width=True, hide_index=True)
+            else:
+                st.info("در بازه انتخاب‌شده هیچ معامله‌ای مطابق شرایط استراتژی ایجاد نشد.")
+            st.caption("فرض‌ها: استراتژی خرید نقدی و بدون اهرم؛ کارمزد و لغزش در ورود و خروج؛ اگر حد ضرر و هدف در یک کندل لمس شوند، حد ضرر مقدم است. عملکرد گذشته تضمین آینده نیست.")
+        except Exception as bt_exc:
+            st.error("بک‌تست اجرا نشد: " + str(bt_exc))
 
     st.subheader("شاخص‌های تحلیل")
     for f in report.get("factors",[]):
