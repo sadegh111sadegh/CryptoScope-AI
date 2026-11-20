@@ -43,6 +43,33 @@ try:
         coin=(market.get("coins") or {}).get(key)
         if coin:coin_rows.append({"ارز":coin.get("name"),"قیمت":money(coin.get("price")),"تغییر ۲۴ ساعت":pct(coin.get("change_24h")),"تغییر ۷ روز":pct(coin.get("change_7d"))})
     if coin_rows:st.dataframe(pd.DataFrame(coin_rows),use_container_width=True,hide_index=True)
+    st.subheader("تحلیل تکنیکال چندتایم‌فریمی")
+    technical = report.get("technical") or {}
+    if technical.get("available"):
+        for asset_id in ("bitcoin", "ethereum", "solana"):
+            asset = (technical.get("assets") or {}).get(asset_id) or {}
+            if asset.get("score") is None:
+                continue
+            st.markdown(f"**{asset.get('name', asset_id)} — {asset.get('signal')} — امتیاز {asset['score']}/100**")
+            rows = []
+            for interval in ("1d", "4h", "1h"):
+                item = (asset.get("timeframes") or {}).get(interval)
+                if item:
+                    rows.append({
+                        "تایم‌فریم": interval,
+                        "وضعیت": item.get("signal"),
+                        "RSI": round(item["rsi14"], 1) if item.get("rsi14") is not None else "ناموجود",
+                        "EMA 20": round(item["ema20"], 2),
+                        "EMA 50": round(item["ema50"], 2),
+                        "EMA 200": round(item["ema200"], 2),
+                        "ATR 14": round(item["atr14"], 2) if item.get("atr14") is not None else "ناموجود",
+                        "نسبت حجم": round(item["volume_ratio"], 2) if item.get("volume_ratio") is not None else "ناموجود",
+                    })
+            if rows:
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("داده تکنیکال کافی از صرافی دریافت نشد؛ تحلیل تکنیکال موقتاً در دسترس نیست.")
+
     st.subheader("شاخص‌های تحلیل")
     for f in report.get("factors",[]):
         st.markdown(f'**{f["name"]}** — امتیاز: {f["score"] if f["score"] is not None else "بدون داده"}')
