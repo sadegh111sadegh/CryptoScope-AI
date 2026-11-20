@@ -134,18 +134,19 @@ def build_messages(report):
     for factor in report["factors"]:
         lines.append(f"• <b>{html.escape(factor['name'])}:</b> {html.escape(factor['detail'])}")
 
-    lines += ["", "⏳ <b>افق احتمالی روند</b>", html.escape(report["horizon"]),
-              "", "🚨 <b>خبرهای مهم ۴۸ ساعت اخیر</b>"]
-    news = report["news"]
-    if not news.get("available"):
-        lines.append("⚠️ دریافت خبر از منابع ناموفق بود؛ درباره نبود خبر مهم نمی‌توان نتیجه‌گیری کرد.")
-    elif report["important_news"]:
-        for item in report["important_news"][:4]:
-            lines.append(f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\n{safe_link(item)}\n<i>{html.escape(item['source'])}</i>")
-    else:
-        lines.append("منابع خبری پاسخ داده‌اند، اما خبر مهمی مطابق معیارهای این گزارش شناسایی نشد.")
+    lines += ["", "⏳ <b>افق احتمالی روند</b>", html.escape(report["horizon"])]
 
-    lines += ["", "⚠️ این تحلیل احتمالی است، نه پیش‌بینی قطعی یا توصیه خریدوفروش."]
+    # Show news only when at least one important headline was retrieved.
+    important_news = report.get("important_news") or []
+    if important_news:
+        lines += ["", "🚨 <b>خبرهای مهم ۴۸ ساعت اخیر</b>"]
+        for item in important_news[:4]:
+            lines.append(
+                f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\\n"
+                f"{safe_link(item)}\\n"
+                f"<i>{html.escape(item['source'])}</i>"
+            )
+
     if market.get("errors"):
         lines += ["", f"ℹ️ تعداد منابع داده ناموفق: {len(market['errors'])}؛ بخش‌های بدون داده در گزارش مشخص شده‌اند."]
 
