@@ -1,5 +1,6 @@
 from market_data import get_market_snapshot
 from news import fetch_news
+from technical_analysis import analyze_market
 
 
 def _number(value):
@@ -98,6 +99,21 @@ def build_report():
                    "قدرت محاسباتی شبکه کاهش یافته",
                    "هش‌ریت تقریباً ثابت است؛ این شاخص بیشتر وضعیت امنیت شبکه را نشان می‌دهد"), 1)
 
+    try:
+        technical = analyze_market()
+    except Exception as exc:
+        technical = {"available": False, "assets": {}, "errors": [str(exc)]}
+
+    btc_technical = (technical.get("assets") or {}).get("bitcoin") or {}
+    technical_score = btc_technical.get("score")
+    add(
+        "تحلیل تکنیکال چندتایم‌فریمی بیت‌کوین",
+        technical_score,
+        1,
+        "اجماع تایم‌فریم‌ها: " + str(btc_technical.get("signal", "داده کافی نیست")),
+        2,
+    )
+
     score = None
     if len(signals) >= 2:
         total_weight = sum(weight for _, weight in signals)
@@ -150,6 +166,7 @@ def build_report():
 
     return {
         "market": market,
+        "technical": technical,
         "direction": direction,
         "score": score,
         "confidence": confidence,

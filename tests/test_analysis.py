@@ -20,9 +20,10 @@ class AnalysisTests(unittest.TestCase):
             "fear_greed": {"value": 68, "label": "Greed"},
         }
 
+    @patch("analysis.analyze_market", return_value={"available": False, "assets": {}})
     @patch("analysis.fetch_news", return_value={"items": [], "available": True})
     @patch("analysis.get_market_snapshot")
-    def test_onchain_and_etf_signals_are_included(self, get_market, _news):
+    def test_onchain_and_etf_signals_are_included(self, get_market, _news, _technical):
         get_market.return_value = self.sample_market()
         report = analysis.build_report()
         names = [item["name"] for item in report["factors"]]
@@ -33,9 +34,10 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(report["confidence"], "بالا")
         self.assertEqual(report["market"]["data_quality"]["available_factors"], 7)
 
+    @patch("analysis.analyze_market", return_value={"available": False, "assets": {}})
     @patch("analysis.fetch_news", return_value={"items": [], "available": False})
     @patch("analysis.get_market_snapshot")
-    def test_missing_data_is_not_fabricated(self, get_market, _news):
+    def test_missing_data_is_not_fabricated(self, get_market, _news, _technical):
         get_market.return_value = {
             "errors": ["source unavailable"],
             "coins": {},
@@ -52,9 +54,10 @@ class AnalysisTests(unittest.TestCase):
         self.assertIn("داده کافی", report["horizon"])
         self.assertTrue(all(item["score"] is None for item in report["factors"]))
 
+    @patch("analysis.analyze_market", return_value={"available": False, "assets": {}})
     @patch("analysis.fetch_news", return_value={"items": [], "available": True})
     @patch("analysis.get_market_snapshot")
-    def test_news_is_filtered_by_importance(self, get_market, _news):
+    def test_news_is_filtered_by_importance(self, get_market, _news, _technical):
         get_market.return_value = self.sample_market()
         _news.return_value = {
             "available": True,

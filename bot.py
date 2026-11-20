@@ -105,6 +105,31 @@ def build_messages(report):
             lines.append(f"• {label}: داده معتبر در دسترس نیست")
     lines.append("افزایش تراکنش به معنی افزایش فعالیت شبکه است، نه لزوماً خرید؛ هش‌ریت بیشتر به امنیت شبکه مربوط است.")
 
+    lines += ["", "📐 <b>تحلیل تکنیکال چندتایم‌فریمی</b>"]
+    technical = report.get("technical") or {}
+    if technical.get("available"):
+        for asset_id in ("bitcoin", "ethereum", "solana"):
+            asset = (technical.get("assets") or {}).get(asset_id) or {}
+            if asset.get("score") is None:
+                continue
+            lines.append(
+                f"• <b>{html.escape(asset.get('name', asset_id))}:</b> "
+                f"{html.escape(asset.get('signal', 'نامشخص'))} | امتیاز {asset['score']}/100"
+            )
+            for interval in ("1d", "4h", "1h"):
+                item = (asset.get("timeframes") or {}).get(interval)
+                if not item:
+                    continue
+                rsi = item.get("rsi14")
+                rsi_text = f"{rsi:.1f}" if rsi is not None else "ناموجود"
+                lines.append(
+                    f"  ◦ {interval}: {html.escape(item.get('signal', ''))} | "
+                    f"RSI {rsi_text} | EMA20 {item.get('ema20', 0):,.2f}"
+                )
+        lines.append("تایم‌فریم روزانه وزن بیشتری دارد؛ کندل باز در محاسبه لحاظ نمی‌شود.")
+    else:
+        lines.append("داده تکنیکال کافی دریافت نشد؛ از ساخت سیگنال بر اساس داده ناقص خودداری شد.")
+
     lines += ["", "🧠 <b>تفسیر عوامل اثرگذار</b>"]
     for factor in report["factors"]:
         lines.append(f"• <b>{html.escape(factor['name'])}:</b> {html.escape(factor['detail'])}")
