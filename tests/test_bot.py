@@ -91,6 +91,27 @@ class BotReportTests(unittest.TestCase):
         message = "\\n".join(build_messages(report))
         self.assertNotIn("موقعیت ورود روزانه", message)
 
+    def test_missing_technical_data_hides_entire_section(self):
+        message = "\\n".join(build_messages(sample_report()))
+        self.assertNotIn("تحلیل تکنیکال چندتایم‌فریمی", message)
+        self.assertNotIn("داده تکنیکال کافی دریافت نشد", message)
+        self.assertNotIn("اجماع تایم‌فریم‌ها", message)
+
+    def test_fear_greed_score_is_shown_and_explanation_is_hidden(self):
+        report = sample_report()
+        report["market"]["fear_greed"] = {"value": 15, "interpretation": "ترس شدید"}
+        message = "\\n".join(build_messages(report))
+        self.assertIn("15/100", message)
+        self.assertIn("ترس شدید", message)
+        self.assertNotIn("این بخش فقط حال‌وهوای خریداران", message)
+
+    def test_etf_explanation_and_unavailable_placeholders_are_hidden(self):
+        report = sample_report()
+        message = "\\n".join(build_messages(report))
+        self.assertNotIn("ورود پول یعنی تقاضای بیشتر", message)
+        self.assertNotIn("داده ETF دریافت نشد", message)
+        self.assertNotIn("داده معتبر در دسترس نیست", message)
+
     def test_generic_trading_disclaimer_is_removed(self):
         message = "\n".join(build_messages(sample_report()))
         self.assertNotIn("توصیه خریدوفروش", message)
