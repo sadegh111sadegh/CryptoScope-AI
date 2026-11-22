@@ -176,14 +176,14 @@ def build_messages(report):
         lines += ["", "🚨 <b>خبرهای مهم ۴۸ ساعت اخیر</b>"]
         for item in important_news[:4]:
             lines.append(
-                f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\\n"
-                f"{safe_link(item)}\\n"
+                f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\n"
+                f"{safe_link(item)}\n"
                 f"<i>{html.escape(item['source'])}</i>"
             )
 
     messages, current = [], ""
     for line in lines:
-        candidate = (current + "\\n" + line).strip() if current else line
+        candidate = (current + "\n" + line).strip() if current else line
         if len(candidate) > 3800:
             if current:
                 messages.append(current)
