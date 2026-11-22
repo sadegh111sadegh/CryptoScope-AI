@@ -47,73 +47,84 @@ def build_messages(report):
     tvl = market.get("defi_tvl")
     btc = market.get("coins", {}).get("bitcoin", {})
     fg = market.get("fear_greed")
-    usable = sum(1 for item in report["factors"] if item["score"] is not None)
+    usable = sum(1 for item in report.get("factors", []) if item.get("score") is not None)
+
     lines = [
         "📡 <b>CRYPTOSCOPE AI | گزارش روزانه بازار</b>",
         "━━━━━━━━━━━━━━━━━━━━",
         f"🧭 <b>جمع‌بندی:</b> {html.escape(report['direction'])}",
-        f"🔎 <b>اطمینان:</b> {report['confidence']} | بر پایه {usable} شاخص قابل استفاده",
-        "", "💹 <b>نمای کلی بازار</b>",
-        f"• ارزش کل بازار: در ۲۴ ساعت گذشته {trend_label(global_data.get('market_cap_change_24h'))}",
-        f"• بیت‌کوین: امروز {trend_label(btc.get('change_24h'))} | این هفته {trend_label(btc.get('change_7d'))}",
+        f"🔎 <b>اطمینان:</b> {html.escape(str(report['confidence']))} | بر پایه {usable} شاخص قابل استفاده",
     ]
-    if fg:
-        value = fg["value"]
-        lines += ["", "😨 <b>ترس و طمع بازار</b>",
-                  f"{fear_bar(value)}  <b>{fg['interpretation']}</b>",
-                  "این بخش فقط حال‌وهوای خریداران و فروشندگان را نشان می‌دهد."]
-    else:
-        lines += ["", "😨 <b>ترس و طمع:</b> داده دریافت نشد"]
 
-    lines += ["", "🌊 <b>نقدینگی و سرمایه در اکوسیستم</b>"]
-    if stable:
-        lines.append(f"• پول آماده ورود به بازار: {trend_label(stable.get('change_7d'))}")
-    else:
-        lines.append("• عرضه استیبل‌کوین‌ها: داده در دسترس نیست")
-    if tvl:
-        lines.append(f"• سرمایه داخل پروژه‌های دیفای: {trend_label(tvl.get('change_7d'))}")
-    else:
-        lines.append("• TVL دیفای: داده در دسترس نیست")
+    market_lines = []
+    market_cap_change = global_data.get("market_cap_change_24h")
+    btc_24h = btc.get("change_24h")
+    btc_7d = btc.get("change_7d")
+    if market_cap_change is not None:
+        market_lines.append(f"• ارزش کل بازار: در ۲۴ ساعت گذشته {trend_label(market_cap_change)}")
+    if btc_24h is not None or btc_7d is not None:
+        parts = []
+        if btc_24h is not None:
+            parts.append("امروز " + trend_label(btc_24h))
+        if btc_7d is not None:
+            parts.append("این هفته " + trend_label(btc_7d))
+        market_lines.append("• بیت‌کوین: " + " | ".join(parts))
+    if market_lines:
+        lines += ["", "💹 <b>نمای کلی بازار</b>"] + market_lines
 
-    lines += ["", "📊 <b>جریان ورود و خروج پول ETF</b>"]
+    if fg and fg.get("value") is not None:
+        value = int(fg["value"])
+        lines += [
+            "", "😨 <b>ترس و طمع بازار</b>",
+            f"{fear_bar(value)}  <b>{html.escape(str(fg.get('interpretation', '')))} | {value}/100</b>",
+        ]
+
+    liquidity_lines = []
+    if stable and stable.get("change_7d") is not None:
+        liquidity_lines.append(f"• پول آماده ورود به بازار: {trend_label(stable['change_7d'])}")
+    if tvl and tvl.get("change_7d") is not None:
+        liquidity_lines.append(f"• سرمایه داخل پروژه‌های دیفای: {trend_label(tvl['change_7d'])}")
+    if liquidity_lines:
+        lines += ["", "🌊 <b>نقدینگی و سرمایه در اکوسیستم</b>"] + liquidity_lines
+
     etf = market.get("etf_flows") or {}
+    etf_lines = []
     if etf.get("available"):
         for symbol, label in (("BTC", "بیت‌کوین"), ("ETH", "اتریوم"), ("SOL", "سولانا")):
             flow = (etf.get("assets") or {}).get(symbol)
-            if flow:
-                daily = float(flow["daily_usd_m"])
-                weekly = float(flow["weekly_usd_m"])
-                lines.append(f"• {label}: امروز {flow_label(daily)} | این هفته {flow_label(weekly)}")
-            else:
-                lines.append(f"• {label}: داده این دارایی منتشر نشده یا دریافت آن ناموفق بوده است.")
-        lines.append("ورود پول یعنی تقاضای بیشتر؛ خروج پول یعنی فشار فروش احتمالی. داده‌ها مربوط به ETFهای آمریکا هستند.")
-    else:
-        lines.append("• داده ETF دریافت نشد.")
-        etf_errors = [err for err in market.get("errors", []) if str(err).startswith("ETF ")]
-        if etf_errors:
-            for err in etf_errors:
-                lines.append("  علت: " + html.escape(str(err)[:350]))
-        else:
-            lines.append("  علت: جزئیات خطا ثبت نشده است.")
-    lines += ["", "⛓️ <b>وضعیت شبکه بیت‌کوین</b>"]
+            if not flow:
+                continue
+            parts = []
+            daily = flow.get("daily_usd_m")
+            weekly = flow.get("weekly_usd_m")
+            if daily is not None:
+                parts.append("امروز " + flow_label(daily))
+            if weekly is not None:
+                parts.append("این هفته " + flow_label(weekly))
+            if parts:
+                etf_lines.append(f"• {label}: " + " | ".join(parts))
+    if etf_lines:
+        lines += ["", "📊 <b>جریان ورود و خروج پول ETF</b>"] + etf_lines
+
     network = report.get("network") or {}
+    network_lines = []
     for key, label in (("n-transactions", "تعداد تراکنش‌ها"), ("hash-rate", "قدرت محاسباتی شبکه")):
         item = network.get(key)
         if item and item.get("change_7d") is not None:
-            lines.append(f"• {label}: در مقایسه با حدود ۷ روز قبل {trend_label(item['change_7d'])}")
-        else:
-            lines.append(f"• {label}: داده معتبر در دسترس نیست")
-    lines.append("افزایش تراکنش به معنی افزایش فعالیت شبکه است، نه لزوماً خرید؛ هش‌ریت بیشتر به امنیت شبکه مربوط است.")
+            network_lines.append(f"• {label}: در مقایسه با حدود ۷ روز قبل {trend_label(item['change_7d'])}")
+    if network_lines:
+        lines += ["", "⛓️ <b>وضعیت شبکه بیت‌کوین</b>"] + network_lines
+        lines.append("افزایش تراکنش به معنی افزایش فعالیت شبکه است، نه لزوماً خرید؛ هش‌ریت بیشتر به امنیت شبکه مربوط است.")
 
-    lines += ["", "📐 <b>تحلیل تکنیکال چندتایم‌فریمی</b>"]
     technical = report.get("technical") or {}
     if technical.get("available"):
+        technical_lines = []
         daily_setups = []
         for asset_id in ("bitcoin", "ethereum", "solana"):
             asset = (technical.get("assets") or {}).get(asset_id) or {}
             if asset.get("score") is None:
                 continue
-            lines.append(
+            technical_lines.append(
                 f"• <b>{html.escape(asset.get('name', asset_id))}:</b> "
                 f"{html.escape(asset.get('signal', 'نامشخص'))} | امتیاز {asset['score']}/100"
             )
@@ -122,11 +133,16 @@ def build_messages(report):
                 if not item:
                     continue
                 rsi = item.get("rsi14")
-                rsi_text = f"{rsi:.1f}" if rsi is not None else "ناموجود"
-                lines.append(
-                    f"  ◦ {interval}: {html.escape(item.get('signal', ''))} | "
-                    f"RSI {rsi_text} | EMA20 {item.get('ema20', 0):,.2f}"
-                )
+                ema20 = item.get("ema20")
+                details = []
+                if rsi is not None:
+                    details.append(f"RSI {rsi:.1f}")
+                if ema20 is not None:
+                    details.append(f"EMA20 {ema20:,.2f}")
+                if details:
+                    technical_lines.append(
+                        f"  ◦ {interval}: {html.escape(item.get('signal', ''))} | " + " | ".join(details)
+                    )
             daily = (asset.get("timeframes") or {}).get("1d") or {}
             setup = daily.get("entry_setup")
             if setup:
@@ -137,35 +153,37 @@ def build_messages(report):
                     f"هدف: {setup['take_profit']:,.4f} | "
                     f"ریسک به بازده: {setup['risk_reward']}"
                 )
+        if technical_lines:
+            lines += ["", "📐 <b>تحلیل تکنیکال چندتایم‌فریمی</b>"] + technical_lines
         if daily_setups:
             lines += ["", "🎯 <b>موقعیت ورود روزانه</b>"] + daily_setups
-        lines.append("تایم‌فریم روزانه وزن بیشتری دارد؛ کندل باز در محاسبه لحاظ نمی‌شود.")
-    else:
-        lines.append("داده تکنیکال کافی دریافت نشد؛ از ساخت سیگنال بر اساس داده ناقص خودداری شد.")
 
-    lines += ["", "🧠 <b>تفسیر عوامل اثرگذار</b>"]
-    for factor in report["factors"]:
-        lines.append(f"• <b>{html.escape(factor['name'])}:</b> {html.escape(factor['detail'])}")
+    factors = [
+        item for item in report.get("factors", [])
+        if item.get("score") is not None and item.get("detail")
+    ]
+    if factors:
+        lines += ["", "🧠 <b>تفسیر عوامل اثرگذار</b>"]
+        for factor in factors:
+            lines.append(f"• <b>{html.escape(factor['name'])}:</b> {html.escape(factor['detail'])}")
 
-    lines += ["", "⏳ <b>افق احتمالی روند</b>", html.escape(report["horizon"])]
+    horizon = report.get("horizon")
+    if horizon and not any(term in str(horizon) for term in ("داده کافی", "اطلاعات کافی", "نامشخص")):
+        lines += ["", "⏳ <b>افق احتمالی روند</b>", html.escape(str(horizon))]
 
-    # Show news only when at least one important headline was retrieved.
     important_news = report.get("important_news") or []
     if important_news:
         lines += ["", "🚨 <b>خبرهای مهم ۴۸ ساعت اخیر</b>"]
         for item in important_news[:4]:
             lines.append(
-                f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\n"
-                f"{safe_link(item)}\n"
+                f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\\n"
+                f"{safe_link(item)}\\n"
                 f"<i>{html.escape(item['source'])}</i>"
             )
 
-    if market.get("errors"):
-        lines += ["", f"ℹ️ تعداد منابع داده ناموفق: {len(market['errors'])}؛ بخش‌های بدون داده در گزارش مشخص شده‌اند."]
-
     messages, current = [], ""
     for line in lines:
-        candidate = (current + "\n" + line).strip() if current else line
+        candidate = (current + "\\n" + line).strip() if current else line
         if len(candidate) > 3800:
             if current:
                 messages.append(current)
