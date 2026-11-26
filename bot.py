@@ -56,6 +56,35 @@ def build_messages(report):
         f"🔎 <b>اطمینان:</b> {html.escape(str(report['confidence']))} | بر پایه {usable} شاخص قابل استفاده",
     ]
 
+    regime = report.get("market_regime") or {}
+    forecast = report.get("forecast") or {}
+    if regime.get("label"):
+        lines += ["", "🧭 <b>رژیم بازار</b>", html.escape(regime["label"]) + " | نوسان: " + html.escape(str(regime.get("volatility_state", "نامشخص")))]
+    if forecast.get("available"):
+        probs = forecast.get("probabilities") or {}
+        lines += [
+            "", "🔮 <b>سناریوهای احتمالی ۲۴ ساعت آینده</b>",
+            f"🟢 صعودی: {probs.get('up', 0):.1f}% | 🔴 نزولی: {probs.get('down', 0):.1f}% | ⚪ خنثی: {probs.get('neutral', 0):.1f}%",
+            "<i>" + html.escape(forecast.get("note", "برآورد سناریویی؛ نه سیگنال قطعی")) + "</i>",
+        ]
+    divergences = report.get("divergences") or []
+    if divergences:
+        lines += ["", "⚠️ <b>واگرایی‌های شناسایی‌شده</b>"]
+        for item in divergences[:4]:
+            lines.append("• " + html.escape(item.get("name", "")) + ": " + html.escape(item.get("detail", "")))
+    performance = report.get("forecast_performance") or {}
+    if performance.get("settled", 0):
+        brier = performance.get("brier_score")
+        accuracy = performance.get("directional_accuracy")
+        perf_text = f"ارزیابی {performance['settled']} پیش‌بینی بالغ‌شده"
+        if accuracy is not None:
+            perf_text += f" | دقت جهت: {accuracy:.1f}%"
+        if brier is not None:
+            perf_text += f" | Brier: {brier:.3f}"
+        lines += ["", "🧪 <b>ارزیابی عملکرد مدل</b>", perf_text]
+    if report.get("confidence") == "در حال ارزیابی":
+        lines.append("اطمینان پیش‌بینی هنوز کالیبره نشده؛ تاریخچه کافی برای اعلام دقت معتبر وجود ندارد.")
+
     market_lines = []
     market_cap_change = global_data.get("market_cap_change_24h")
     btc_24h = btc.get("change_24h")
