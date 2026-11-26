@@ -89,13 +89,35 @@ class BotReportTests(unittest.TestCase):
             },
         }
         message = "\n".join(build_messages(report))
-        self.assertNotIn("موقعیت ورود روزانه", message)
+        self.assertNotIn("🎯 <b>موقعیت ورود روزانه</b>", message)
 
-    def test_missing_technical_data_hides_entire_section(self):
-        message = "\n".join(build_messages(sample_report()))
-        self.assertNotIn("تحلیل تکنیکال چندتایم‌فریمی", message)
-        self.assertNotIn("داده تکنیکال کافی دریافت نشد", message)
-        self.assertNotIn("اجماع تایم‌فریم‌ها", message)
+    def test_missing_technical_data_is_reported_explicitly(self):
+        report = sample_report()
+        report["technical"]["assets"]["bitcoin"] = {
+            "timeframes": {}, "errors": ["Binance timeout"]
+        }
+        message = "\\n".join(build_messages(report))
+        self.assertIn("تحلیل تکنیکال چندتایم‌فریمی", message)
+        self.assertIn("داده تکنیکال معتبر", message)
+        self.assertIn("Binance timeout", message)
+        self.assertIn("هیچ ستاپ ورود روزانه", message)
+
+    def test_partial_timeframe_data_is_shown_without_consensus(self):
+        report = sample_report()
+        report["technical"]["assets"]["bitcoin"] = {
+            "name": "بیت‌کوین", "score": None,
+            "timeframes": {
+                "1d": {
+                    "signal": "تمایل نزولی", "rsi14": 42.5,
+                    "ema20": 65000.0, "macd_histogram": -12.0,
+                }
+            },
+            "errors": ["4h: timeout"],
+        }
+        message = "\\n".join(build_messages(report))
+        self.assertIn("بیت‌کوین | 1d", message)
+        self.assertIn("RSI 42.5", message)
+        self.assertIn("MACD منفی", message)
 
     def test_fear_greed_score_is_shown_and_explanation_is_hidden(self):
         report = sample_report()

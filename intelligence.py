@@ -10,45 +10,90 @@ def number(value):
         return None
 
 
-def _sign(value, threshold=0.0):
-    value = number(value)
-    if value is None or abs(value) <= threshold:
+def _timeframe_direction(item):
+    """Return a direction only when EMA structure, slopes and ADX align."""
+    if not item:
         return 0
-    return 1 if value > 0 else -1
+    price = number(item.get("price"))
+    ema20 = number(item.get("ema20"))
+    ema50 = number(item.get("ema50"))
+    ema200 = number(item.get("ema200"))
+    slope20 = number(item.get("ema20_slope_pct"))
+    slope50 = number(item.get("ema50_slope_pct"))
+    adx = number(item.get("adx14"))
+    structure = number(item.get("structure_direction"))
+    if any(value is None for value in (price, ema20, ema50, ema200, slope20, slope50, adx)):
+        return 0
+    if price > ema20 > ema50 > ema200 and slope20 > 0 and slope50 > 0 and adx >= 18 and structure in (0, 1):
+        return 1
+    if price < ema20 < ema50 < ema200 and slope20 < 0 and slope50 < 0 and adx >= 18 and structure in (0, -1):
+        return -1
+    return 0
 
 
 def detect_market_regime(market, technical):
-    btc = (market.get("coins") or {}).get("bitcoin") or {}
-    daily = number(btc.get("change_24h"))
-    weekly = number(btc.get("change_7d"))
-    asset = (technical.get("assets") or {}).get("bitcoin") or {}
-    tech_score = number(asset.get("score"))
-    if weekly is None and tech_score is None:
-        return {"label": "نامشخص", "trend": "نامشخص", "volatility_state": "نامشخص",
-                "evidence": ["داده کافی برای تشخیص رژیم بازار وجود ندارد"]}
-    score = (weekly or 0) * 0.55 + (daily or 0) * 0.15 + (tech_score or 0) * 0.035
-    if score >= 2.5:
+    """Classify BTC from daily structure, 4h confirmation, ADX and range width."""
+    assets = technical.get("assets") or {}
+    btc = assets.get("bitcoin") or {}
+    timeframes = btc.get("timeframes") or {}
+    daily = timeframes.get("1d") or {}
+    four_hour = timeframes.get("4h") or {}
+
+    daily_direction = _timeframe_direction(daily)
+    four_hour_direction = _timeframe_direction(four_hour)
+    daily_adx = number(daily.get("adx14"))
+    range_width = number(daily.get("range_width_pct"))
+    atr_pct = number(daily.get("atr_pct"))
+    tech_score = number(btc.get("score"))
+
+    evidence = []
+    if daily_adx is not None:
+        evidence.append(f"ADX روزانه: {daily_adx:.1f}")
+    if range_width is not None:
+        evidence.append(f"پهنای محدوده ۲۰ روزه: {range_width:.1f}%")
+    if atr_pct is not None:
+        evidence.append(f"ATR روزانه نسبت به قیمت: {atr_pct:.2f}%")
+    if number(daily.get("structure_direction")) is not None:
+        structure = number(daily.get("structure_direction"))
+        evidence.append("ساختار سقف‌ها و کف‌های اخیر: " + ("سقف و کف بالاتر" if structure > 0 else "سقف و کف پایین‌تر" if structure < 0 else "بدون شکست ساختاری روشن"))
+    if daily_direction:
+        evidence.append("ساختار EMA و شیب روزانه: " + ("صعودی" if daily_direction > 0 else "نزولی"))
+    elif daily:
+        evidence.append("ساختار EMA روزانه: هم‌راستایی روند تأیید نشد")
+    if four_hour_direction:
+        evidence.append("تأیید ۴ ساعته: " + ("صعودی" if four_hour_direction > 0 else "نزولی"))
+    elif four_hour:
+        evidence.append("تأیید ۴ ساعته: هم‌جهت با روند روزانه نیست یا قدرت کافی ندارد")
+
+    if not daily or daily_adx is None or range_width is None:
+        label, trend = "نامشخص", "نامشخص"
+        evidence.insert(0, "داده روزانه کافی برای تشخیص ساختار بازار وجود ندارد")
+    elif daily_direction == 1 and four_hour_direction == 1:
         label, trend = "روند صعودی", "صعودی"
-    elif score <= -2.5:
+    elif daily_direction == -1 and four_hour_direction == -1:
         label, trend = "روند نزولی", "نزولی"
-    elif weekly is not None and abs(weekly) < 2 and (tech_score is None or abs(tech_score) < 25):
+    elif daily_adx < 18 and range_width <= 12 and four_hour_direction == 0:
         label, trend = "بازار رنج", "خنثی"
-    elif weekly is not None and weekly > 0 and tech_score is not None and tech_score < -25:
+        evidence.append("قدرت روند پایین و محدوده نوسان ۲۰ روزه فشرده است")
+    elif daily_direction == 1 and four_hour_direction == -1:
         label, trend = "اصلاح در ساختار بزرگ‌تر صعودی", "ترکیبی"
-    elif weekly is not None and weekly < 0 and tech_score is not None and tech_score > 25:
+    elif daily_direction == -1 and four_hour_direction == 1:
         label, trend = "بازگشت احتمالی در ساختار بزرگ‌تر نزولی", "ترکیبی"
     else:
         label, trend = "گذار یا عدم‌قطعیت", "ترکیبی"
-    abs_daily = abs(daily) if daily is not None else None
-    volatility = "بالا" if abs_daily is not None and abs_daily >= 5 else "متوسط" if abs_daily is not None and abs_daily >= 2 else "پایین/نامشخص"
-    evidence = []
-    if weekly is not None:
-        evidence.append(f"تغییر هفتگی BTC: {weekly:+.2f}%")
-    if daily is not None:
-        evidence.append(f"تغییر ۲۴ ساعته BTC: {daily:+.2f}%")
-    if tech_score is not None:
-        evidence.append(f"امتیاز تکنیکال چندتایم‌فریمی: {tech_score:+.0f}")
-    return {"label": label, "trend": trend, "volatility_state": volatility, "raw_score": round(score, 3), "evidence": evidence}
+
+    volatility = (
+        "بالا" if atr_pct is not None and atr_pct >= 5 else
+        "متوسط" if atr_pct is not None and atr_pct >= 2 else
+        "پایین" if atr_pct is not None else "نامشخص"
+    )
+    return {
+        "label": label,
+        "trend": trend,
+        "volatility_state": volatility,
+        "technical_score": tech_score,
+        "evidence": evidence or ["شواهد تکنیکال کافی در دسترس نیست"],
+    }
 
 
 def detect_divergences(market, technical):
