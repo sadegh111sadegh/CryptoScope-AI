@@ -202,7 +202,7 @@ def build_messages(report):
     if daily_setups:
         lines += ["", "🎯 <b>موقعیت ورود روزانه</b>"] + daily_setups
     else:
-        lines += ["", "🎯 <b>سیگنال معاملاتی:</b> فعلاً موقعیت ورود روزانه با شروط سیستم تأیید نشده است."]
+        lines += ["", "🎯 <b>سیگنال معاملاتی:</b> فعلاً هیچ ستاپ ورود روزانه‌ای با شروط سیستم تأیید نشده است."]
     if technical_errors:
         unique_errors = list(dict.fromkeys(str(error) for error in technical_errors))
         lines.append("علت/خطای دریافت داده: " + html.escape("؛ ".join(unique_errors[:2])[:260]))
