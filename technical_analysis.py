@@ -36,6 +36,37 @@ def _rsi(values, period=14):
     return 100 - (100 / (1 + avg_gain / avg_loss))
 
 
+def _adx(highs, lows, closes, period=14):
+    """Simple rolling ADX estimate; returns None until enough candles exist."""
+    if len(closes) < (period * 2 + 1):
+        return None
+    true_ranges, plus_moves, minus_moves = [], [], []
+    for i in range(1, len(closes)):
+        up_move = highs[i] - highs[i - 1]
+        down_move = lows[i - 1] - lows[i]
+        plus_moves.append(up_move if up_move > down_move and up_move > 0 else 0.0)
+        minus_moves.append(down_move if down_move > up_move and down_move > 0 else 0.0)
+        true_ranges.append(max(
+            highs[i] - lows[i],
+            abs(highs[i] - closes[i - 1]),
+            abs(lows[i] - closes[i - 1]),
+        ))
+
+    dx_values = []
+    for end in range(period, len(true_ranges) + 1):
+        start = end - period
+        tr_sum = sum(true_ranges[start:end])
+        if tr_sum <= 0:
+            continue
+        plus_di = 100 * sum(plus_moves[start:end]) / tr_sum
+        minus_di = 100 * sum(minus_moves[start:end]) / tr_sum
+        denominator = plus_di + minus_di
+        dx_values.append(100 * abs(plus_di - minus_di) / denominator if denominator else 0.0)
+    if len(dx_values) < period:
+        return None
+    return sum(dx_values[-period:]) / period
+
+
 def _indicators(candles):
     closes = [row["close"] for row in candles]
     highs = [row["high"] for row in candles]
@@ -47,6 +78,10 @@ def _indicators(candles):
     ema20 = _ema(closes, 20)
     ema50 = _ema(closes, 50)
     ema200 = _ema(closes, 200)
+    ema20_previous = _ema(closes[:-5], 20) if len(closes) > 205 else None
+    ema50_previous = _ema(closes[:-5], 50) if len(closes) > 205 else None
+    ema20_slope_pct = ((ema20 / ema20_previous) - 1) * 100 if ema20 and ema20_previous else None
+    ema50_slope_pct = ((ema50 / ema50_previous) - 1) * 100 if ema50 and ema50_previous else None
     rsi = _rsi(closes)
     macd_line = _ema(closes, 12) - _ema(closes, 26)
     signal_series = []
@@ -65,6 +100,12 @@ def _indicators(candles):
             abs(lows[i] - closes[i - 1]),
         ))
     atr = sum(true_ranges[-14:]) / 14 if len(true_ranges) >= 14 else None
+    atr_pct = (atr / closes[-1] * 100) if atr is not None and closes[-1] else None
+    adx = _adx(highs, lows, closes)
+    range_width_pct = (
+        (max(highs[-20:]) - min(lows[-20:])) / closes[-1] * 100
+        if closes[-1] else None
+    )
     volume_avg = sum(volumes[-21:-1]) / 20 if len(volumes) >= 21 else None
     volume_ratio = volumes[-1] / volume_avg if volume_avg else None
 
@@ -89,7 +130,6 @@ def _indicators(candles):
             score += 8
 
     if macd_hist is not None:
-        # Ignore floating-point noise around a zero histogram.
         if macd_hist > 1e-8:
             score += 20
         elif macd_hist < -1e-8:
@@ -105,9 +145,14 @@ def _indicators(candles):
         "ema20": ema20,
         "ema50": ema50,
         "ema200": ema200,
+        "ema20_slope_pct": ema20_slope_pct,
+        "ema50_slope_pct": ema50_slope_pct,
         "rsi14": rsi,
         "macd_histogram": macd_hist,
         "atr14": atr,
+        "atr_pct": atr_pct,
+        "adx14": adx,
+        "range_width_pct": range_width_pct,
         "volume_ratio": volume_ratio,
         "score": score,
         "signal": signal,
@@ -126,7 +171,6 @@ def _daily_entry_setup(indicators):
     macd_hist = indicators.get("macd_histogram")
     score = indicators.get("score")
 
-    # Avoid chasing overbought candles or entering against the daily trend.
     if not all(value is not None for value in (
         entry, atr, ema20, ema50, ema200, rsi, macd_hist, score
     )):
@@ -160,7 +204,6 @@ def analyze_market():
                 raw = get_json(BASE_URL, {
                     "symbol": symbol, "interval": interval, "limit": 220,
                 })
-                # The last Binance candle can still be forming; never score it.
                 rows = raw[:-1]
                 candles = [{
                     "close": float(row[4]),
