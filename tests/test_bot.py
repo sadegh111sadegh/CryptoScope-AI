@@ -100,7 +100,7 @@ class BotReportTests(unittest.TestCase):
         self.assertIn("تحلیل تکنیکال چندتایم‌فریمی", message)
         self.assertIn("داده تکنیکال معتبر", message)
         self.assertIn("Binance timeout", message)
-        self.assertIn("فعلاً موقعیت ورود", message)
+        self.assertIn("هیچ ستاپ ورود روزانه", message)
 
     def test_partial_timeframe_data_is_shown_without_consensus(self):
         report = sample_report()
