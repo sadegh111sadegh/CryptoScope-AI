@@ -31,7 +31,7 @@ class AnalysisTests(unittest.TestCase):
         self.assertIn("هش‌ریت شبکه بیت‌کوین", names)
         self.assertIn("جریان خالص هفتگی ETF بیت‌کوین", names)
         self.assertIsNotNone(report["score"])
-        self.assertEqual(report["confidence"], "بالا")
+        self.assertEqual(report["confidence"], "در حال ارزیابی")
         self.assertEqual(report["market"]["data_quality"]["available_factors"], 7)
 
     @patch("analysis.analyze_market", return_value={"available": False, "assets": {}})
