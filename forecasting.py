@@ -19,9 +19,11 @@ def forecast_scenarios(score, regime, divergences, coverage, horizon_hours=24):
     down = _sigmoid(-latent)
     neutral = max(0.12, 1.0 - abs(up - down))
     total = up + down + neutral
-    probabilities = {"up": round(up / total * 100, 1),
-                     "down": round(down / total * 100, 1),
-                     "neutral": round(neutral / total * 100, 1)}
+    up_pct = round(up / total * 100, 1)
+    down_pct = round(down / total * 100, 1)
+    # Make the displayed values sum to exactly 100.0 despite one-decimal rounding.
+    probabilities = {"up": up_pct, "down": down_pct,
+                     "neutral": round(100.0 - up_pct - down_pct, 1)}
     confidence = "محدود" if coverage < 4 else "متوسط"
     return {
         "available": True, "horizon_hours": horizon_hours,
