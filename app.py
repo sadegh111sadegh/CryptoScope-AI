@@ -34,6 +34,25 @@ try:
     glob=market.get("global") or {}
     quality=market.get("data_quality") or {}
     st.markdown(f'<div class="panel"><h2>جهت بازار: {report["direction"]}</h2><h3>امتیاز: {report["score"] if report["score"] is not None else "ناموجود"} از ۱۰۰</h3><p>اطمینان: {report["confidence"]} | شاخص معتبر: {quality.get("available_factors", 0)} از {quality.get("total_factors", 0)}</p><p>{report["horizon"]}</p></div>',unsafe_allow_html=True)
+    st.subheader("هوشمندی بازار و سناریوها")
+    regime = report.get("market_regime") or {}
+    forecast = report.get("forecast") or {}
+    r1, r2, r3 = st.columns(3)
+    r1.metric("رژیم بازار", regime.get("label", "نامشخص"))
+    r2.metric("وضعیت نوسان", regime.get("volatility_state", "نامشخص"))
+    r3.metric("اطمینان مدل", report.get("confidence", "در حال ارزیابی"))
+    if forecast.get("available"):
+        probs = forecast.get("probabilities") or {}
+        p1, p2, p3 = st.columns(3)
+        p1.metric("سناریوی صعودی", f'{probs.get("up", 0):.1f}%')
+        p2.metric("سناریوی نزولی", f'{probs.get("down", 0):.1f}%')
+        p3.metric("سناریوی خنثی", f'{probs.get("neutral", 0):.1f}%')
+        st.caption(f'روش: {forecast.get("method")} | کالیبره‌شده: {"بله" if forecast.get("calibrated") else "خیر"} | {forecast.get("note", "")}')
+    if report.get("divergences"):
+        for item in report["divergences"]:
+            st.warning(f'{item.get("name")}: {item.get("detail")}')
+    perf = report.get("forecast_performance") or {}
+    st.caption(f'پیش‌بینی‌های ارزیابی‌شده: {perf.get("settled", 0)} | در انتظار: {perf.get("pending", 0)} | دقت جهت: {perf.get("directional_accuracy") if perf.get("directional_accuracy") is not None else "هنوز داده کافی نیست"} | Brier: {perf.get("brier_score") if perf.get("brier_score") is not None else "—"}')
     cards=[("ارزش کل بازار",money(glob.get("market_cap"))),("حجم ۲۴ ساعته",money(glob.get("volume_24h"))),("تغییر ارزش بازار",pct(glob.get("market_cap_change_24h"))),("دامیننس BTC",pct(glob.get("btc_dominance")))]
     cols=st.columns(4)
     for c,(name,value) in zip(cols,cards):

@@ -1,14 +1,13 @@
 from market_data import get_market_snapshot
 from news import fetch_news
 from technical_analysis import analyze_market
-
-
-def _number(value):
-    try:
-        number = float(value)
-        return number if number == number and abs(number) != float("inf") else None
-    except (TypeError, ValueError):
-        return None
+from intelligence import detect_market_regime, detect_divergences, number as _number
+from forecasting import forecast_scenarios
+from adaptive_weights import calculate_adaptive_weights
+from signal_tracker import (
+    DEFAULT_PATH, load_history, save_history, settle_forecasts,
+    record_forecast, performance_summary,
+)
 
 
 def _score(change, multiplier):
@@ -40,16 +39,16 @@ def _flow_detail(value):
     return "در بازه بررسی‌شده پول خالص از ETFها خارج شده"
 
 
-def build_report():
+def build_report(history_path=DEFAULT_PATH):
     market = get_market_snapshot()
     news = fetch_news()
     factors, signals = [], []
 
     def add(name, change, multiplier, detail, weight=1):
         score = _score(change, multiplier)
-        factors.append({"name": name, "score": score, "detail": detail})
+        factors.append({"name": name, "score": score, "detail": detail, "base_weight": weight})
         if score is not None:
-            signals.append((score, weight))
+            signals.append((name, score, weight))
 
     global_data = market.get("global") or {}
     cap_change = global_data.get("market_cap_change_24h")
@@ -69,14 +68,14 @@ def build_report():
         _interpret(stable_week,
                    "عرضه استیبل‌کوین‌ها بیشتر شده؛ ظرفیت بالقوه نقدینگی بازار افزایش یافته",
                    "عرضه استیبل‌کوین‌ها کمتر شده؛ ظرفیت بالقوه نقدینگی کاهش یافته",
-                   "عرضه استیبل‌کوین‌ها تقریباً ثابت بوده"), 1)
+                   "عرضه استیبل‌کوین‌ها تقریباً ثابت بوده؛ تغییر آن به‌تنهایی جهت بازار را مشخص نمی‌کند"), 1)
 
     tvl = market.get("defi_tvl") or {}
     tvl_week = tvl.get("change_7d")
     add("سرمایه قفل‌شده دیفای (TVL)", tvl_week, 8,
         _interpret(tvl_week, "TVL دیفای افزایش یافته",
                    "TVL دیفای کاهش یافته",
-                   "TVL دیفای تقریباً ثابت بوده؛ تغییر آن به‌تنهایی جهت بازار را مشخص نمی‌کند"), 1)
+                   "TVL دیفای تقریباً ثابت بوده؛ این شاخص به‌تنهایی جهت بازار را مشخص نمی‌کند"), 1)
 
     etf = market.get("etf_flows") or {}
     btc_etf = (etf.get("assets") or {}).get("BTC") or {}
@@ -114,12 +113,25 @@ def build_report():
         2,
     )
 
+    # Mature old forecasts before calculating weights, so only realized outcomes
+    # can influence future reports.
+    history = load_history(history_path)
+    current_price = _number(btc.get("price"))
+    history = settle_forecasts(history, current_price)
+    adaptive = calculate_adaptive_weights(history)
+    weighted = []
+    factor_scores = {}
+    for name, value, base_weight in signals:
+        learned_weight = adaptive["weights"].get(name, 1.0)
+        effective_weight = base_weight * learned_weight
+        weighted.append((value, effective_weight))
+        factor_scores[name] = value
     score = None
-    if len(signals) >= 2:
-        total_weight = sum(weight for _, weight in signals)
-        score = round(sum(value * weight for value, weight in signals) / total_weight)
+    if len(weighted) >= 2:
+        total_weight = sum(weight for _, weight in weighted)
+        score = round(sum(value * weight for value, weight in weighted) / total_weight)
 
-    if score is None or len(signals) < 2:
+    if score is None or len(weighted) < 2:
         direction = "داده کافی نیست"
     elif score >= 15:
         direction = "تمایل صعودی"
@@ -128,23 +140,31 @@ def build_report():
     else:
         direction = "خنثی؛ جهت مشخصی دیده نمی‌شود"
 
-    coverage = len(signals)
-    confidence = "بالا" if coverage >= 6 else "متوسط" if coverage >= 4 else "پایین"
-    values = [value for value, _ in signals]
-    bullish = sum(1 for value in values if value > 8)
-    bearish = sum(1 for value in values if value < -8)
-    if coverage >= 5 and max(bullish, bearish) >= 4 and abs(score or 0) >= 20:
+    regime = detect_market_regime(market, technical)
+    divergences = detect_divergences(market, technical)
+    forecast = forecast_scenarios(score, regime, divergences, len(weighted), 24)
+    if current_price is not None and forecast.get("available"):
+        history = record_forecast(history, current_price, forecast, factor_scores)
+    save_history(history, history_path)
+    performance = performance_summary(history)
+
+    # Until enough matured out-of-sample observations exist, do not call the
+    # directional forecast highly confident.
+    if performance["settled"] >= 30 and performance["directional_accuracy"] is not None:
+        confidence = "بالا" if performance["directional_accuracy"] >= 60 else "متوسط" if performance["directional_accuracy"] >= 52 else "پایین"
+    else:
+        confidence = "در حال ارزیابی"
+    coverage = len(weighted)
+
+    if coverage >= 5 and score is not None and abs(score) >= 20:
         horizon = (
-            "سناریوی محتمل: جهت غالب ممکن است حدود ۳ تا ۷ روز ادامه پیدا کند؛ "
-            "این فقط برآورد مشروط به حفظ شرایط فعلی است و باید با گزارش‌های بعدی بازبینی شود."
+            "سناریوی جهت‌دار فعلی صرفاً برای افق کوتاه‌مدت بررسی می‌شود؛ "
+            "برای افق چندروزه باید داده و تأیید مستقل بیشتری فراهم شود."
         )
     elif coverage >= 3:
-        horizon = (
-            "فعلاً برای تعیین تعداد روزهای ادامه روند هم‌جهتی کافی بین شاخص‌ها وجود ندارد. "
-            "گزارش بعدی می‌تواند این برآورد را تغییر دهد."
-        )
+        horizon = "هم‌جهتی شاخص‌ها برای برآورد مطمئن ادامه روند کافی نیست."
     else:
-        horizon = "داده کافی برای تخمین مدت روند نداریم؛ از اعلام تعداد روز به‌صورت حدسی خودداری می‌کنیم."
+        horizon = "داده کافی برای تخمین مدت روند نداریم."
 
     fear_greed = market.get("fear_greed")
     if fear_greed:
@@ -163,17 +183,15 @@ def build_report():
         "total_factors": len(factors),
         "errors": len(market.get("errors") or []),
     }
+    for factor in factors:
+        factor["adaptive_weight"] = adaptive["weights"].get(factor["name"], 1.0)
 
     return {
-        "market": market,
-        "technical": technical,
-        "direction": direction,
-        "score": score,
-        "confidence": confidence,
-        "horizon": horizon,
-        "factors": factors,
-        "network": network,
-        "news": news,
-        "important_news": important_news,
-        "critical_news": critical_news,
+        "market": market, "technical": technical, "direction": direction,
+        "score": score, "confidence": confidence, "horizon": horizon,
+        "factors": factors, "network": network, "news": news,
+        "important_news": important_news, "critical_news": critical_news,
+        "market_regime": regime, "divergences": divergences,
+        "forecast": forecast, "forecast_performance": performance,
+        "adaptive_weights": adaptive, "forecast_history_path": history_path,
     }
