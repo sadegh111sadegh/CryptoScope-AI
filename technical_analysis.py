@@ -37,7 +37,7 @@ def _rsi(values, period=14):
 
 
 def _adx(highs, lows, closes, period=14):
-    """Simple rolling ADX estimate; returns None until enough candles exist."""
+    """Wilder's smoothed ADX; returns None until enough completed candles exist."""
     if len(closes) < (period * 2 + 1):
         return None
     true_ranges, plus_moves, minus_moves = [], [], []
@@ -52,20 +52,32 @@ def _adx(highs, lows, closes, period=14):
             abs(lows[i] - closes[i - 1]),
         ))
 
+    tr_smooth = sum(true_ranges[:period])
+    plus_smooth = sum(plus_moves[:period])
+    minus_smooth = sum(minus_moves[:period])
     dx_values = []
-    for end in range(period, len(true_ranges) + 1):
-        start = end - period
-        tr_sum = sum(true_ranges[start:end])
-        if tr_sum <= 0:
-            continue
-        plus_di = 100 * sum(plus_moves[start:end]) / tr_sum
-        minus_di = 100 * sum(minus_moves[start:end]) / tr_sum
+
+    def dx_value(tr, plus, minus):
+        if tr <= 0:
+            return 0.0
+        plus_di = 100 * plus / tr
+        minus_di = 100 * minus / tr
         denominator = plus_di + minus_di
-        dx_values.append(100 * abs(plus_di - minus_di) / denominator if denominator else 0.0)
+        return 100 * abs(plus_di - minus_di) / denominator if denominator else 0.0
+
+    dx_values.append(dx_value(tr_smooth, plus_smooth, minus_smooth))
+    for i in range(period, len(true_ranges)):
+        tr_smooth = tr_smooth - (tr_smooth / period) + true_ranges[i]
+        plus_smooth = plus_smooth - (plus_smooth / period) + plus_moves[i]
+        minus_smooth = minus_smooth - (minus_smooth / period) + minus_moves[i]
+        dx_values.append(dx_value(tr_smooth, plus_smooth, minus_smooth))
+
     if len(dx_values) < period:
         return None
-    return sum(dx_values[-period:]) / period
-
+    adx = sum(dx_values[:period]) / period
+    for value in dx_values[period:]:
+        adx = ((adx * (period - 1)) + value) / period
+    return adx
 
 def _indicators(candles):
     closes = [row["close"] for row in candles]
@@ -105,6 +117,15 @@ def _indicators(candles):
     range_width_pct = (
         (max(highs[-20:]) - min(lows[-20:])) / closes[-1] * 100
         if closes[-1] else None
+    )
+    previous_swing_high = max(highs[-20:-10])
+    recent_swing_high = max(highs[-10:])
+    previous_swing_low = min(lows[-20:-10])
+    recent_swing_low = min(lows[-10:])
+    structure_direction = (
+        1 if recent_swing_high > previous_swing_high and recent_swing_low > previous_swing_low else
+        -1 if recent_swing_high < previous_swing_high and recent_swing_low < previous_swing_low else
+        0
     )
     volume_avg = sum(volumes[-21:-1]) / 20 if len(volumes) >= 21 else None
     volume_ratio = volumes[-1] / volume_avg if volume_avg else None
@@ -153,6 +174,7 @@ def _indicators(candles):
         "atr_pct": atr_pct,
         "adx14": adx,
         "range_width_pct": range_width_pct,
+        "structure_direction": structure_direction,
         "volume_ratio": volume_ratio,
         "score": score,
         "signal": signal,
