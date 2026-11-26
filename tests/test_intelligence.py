@@ -16,6 +16,7 @@ def timeframe(direction=1, adx=25, range_width=8, atr_pct=3):
         "price": price, "ema20": ema20, "ema50": ema50, "ema200": ema200,
         "ema20_slope_pct": slope20, "ema50_slope_pct": slope50,
         "adx14": adx, "range_width_pct": range_width, "atr_pct": atr_pct,
+        "structure_direction": direction,
     }
 
 
