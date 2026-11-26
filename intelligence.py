@@ -21,11 +21,12 @@ def _timeframe_direction(item):
     slope20 = number(item.get("ema20_slope_pct"))
     slope50 = number(item.get("ema50_slope_pct"))
     adx = number(item.get("adx14"))
+    structure = number(item.get("structure_direction"))
     if any(value is None for value in (price, ema20, ema50, ema200, slope20, slope50, adx)):
         return 0
-    if price > ema20 > ema50 > ema200 and slope20 > 0 and slope50 > 0 and adx >= 18:
+    if price > ema20 > ema50 > ema200 and slope20 > 0 and slope50 > 0 and adx >= 18 and structure in (0, 1):
         return 1
-    if price < ema20 < ema50 < ema200 and slope20 < 0 and slope50 < 0 and adx >= 18:
+    if price < ema20 < ema50 < ema200 and slope20 < 0 and slope50 < 0 and adx >= 18 and structure in (0, -1):
         return -1
     return 0
 
@@ -52,6 +53,9 @@ def detect_market_regime(market, technical):
         evidence.append(f"پهنای محدوده ۲۰ روزه: {range_width:.1f}%")
     if atr_pct is not None:
         evidence.append(f"ATR روزانه نسبت به قیمت: {atr_pct:.2f}%")
+    if number(daily.get("structure_direction")) is not None:
+        structure = number(daily.get("structure_direction"))
+        evidence.append("ساختار سقف‌ها و کف‌های اخیر: " + ("سقف و کف بالاتر" if structure > 0 else "سقف و کف پایین‌تر" if structure < 0 else "بدون شکست ساختاری روشن"))
     if daily_direction:
         evidence.append("ساختار EMA و شیب روزانه: " + ("صعودی" if daily_direction > 0 else "نزولی"))
     elif daily:
