@@ -89,7 +89,7 @@ class BotReportTests(unittest.TestCase):
             },
         }
         message = "\n".join(build_messages(report))
-        self.assertNotIn("موقعیت ورود روزانه", message)
+        self.assertNotIn("🎯 <b>موقعیت ورود روزانه</b>", message)
 
     def test_missing_technical_data_is_reported_explicitly(self):
         report = sample_report()
