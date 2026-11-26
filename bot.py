@@ -146,47 +146,64 @@ def build_messages(report):
         lines.append("افزایش تراکنش به معنی افزایش فعالیت شبکه است، نه لزوماً خرید؛ هش‌ریت بیشتر به امنیت شبکه مربوط است.")
 
     technical = report.get("technical") or {}
-    if technical.get("available"):
-        technical_lines = []
-        daily_setups = []
-        for asset_id in ("bitcoin", "ethereum", "solana"):
-            asset = (technical.get("assets") or {}).get(asset_id) or {}
-            if asset.get("score") is None:
-                continue
+    technical_lines = []
+    daily_setups = []
+    technical_errors = []
+    assets = technical.get("assets") or {}
+    for asset_id in ("bitcoin", "ethereum", "solana"):
+        asset = assets.get(asset_id) or {}
+        name = html.escape(asset.get("name", asset_id))
+        timeframes = asset.get("timeframes") or {}
+        if asset.get("score") is not None:
             technical_lines.append(
-                f"• <b>{html.escape(asset.get('name', asset_id))}:</b> "
-                f"{html.escape(asset.get('signal', 'نامشخص'))} | امتیاز {asset['score']}/100"
+                f"• <b>{name}:</b> {html.escape(asset.get('signal', 'نامشخص'))} | "
+                f"اجماع {asset['score']}/100"
             )
-            for interval in ("1d", "4h", "1h"):
-                item = (asset.get("timeframes") or {}).get(interval)
-                if not item:
-                    continue
-                rsi = item.get("rsi14")
-                ema20 = item.get("ema20")
-                details = []
-                if rsi is not None:
-                    details.append(f"RSI {rsi:.1f}")
-                if ema20 is not None:
-                    details.append(f"EMA20 {ema20:,.2f}")
-                if details:
-                    technical_lines.append(
-                        f"  ◦ {interval}: {html.escape(item.get('signal', ''))} | " + " | ".join(details)
-                    )
-            daily = (asset.get("timeframes") or {}).get("1d") or {}
-            setup = daily.get("entry_setup")
-            if setup:
-                daily_setups.append(
-                    f"• <b>{html.escape(asset.get('name', asset_id))}</b> | "
-                    f"ورود: {setup['entry']:,.4f} | "
-                    f"حد ضرر: {setup['stop_loss']:,.4f} | "
-                    f"هدف: {setup['take_profit']:,.4f} | "
-                    f"ریسک به بازده: {setup['risk_reward']}"
-                )
-        if technical_lines:
-            lines += ["", "📐 <b>تحلیل تکنیکال چندتایم‌فریمی</b>"] + technical_lines
-        if daily_setups:
-            lines += ["", "🎯 <b>موقعیت ورود روزانه</b>"] + daily_setups
+        elif not timeframes:
+            technical_errors.extend(asset.get("errors") or [])
 
+        for interval in ("1d", "4h", "1h"):
+            item = timeframes.get(interval)
+            if not item:
+                continue
+            rsi = item.get("rsi14")
+            ema20 = item.get("ema20")
+            macd = item.get("macd_histogram")
+            details = []
+            if rsi is not None:
+                details.append(f"RSI {rsi:.1f}")
+            if ema20 is not None:
+                details.append(f"EMA20 {ema20:,.2f}")
+            if macd is not None:
+                details.append("MACD مثبت" if macd > 0 else "MACD منفی" if macd < 0 else "MACD خنثی")
+            status = html.escape(item.get("signal", "نامشخص"))
+            technical_lines.append(
+                f"  ◦ {name} | {interval}: {status}" +
+                (" | " + " | ".join(details) if details else "")
+            )
+
+        daily = timeframes.get("1d") or {}
+        setup = daily.get("entry_setup")
+        if setup:
+            daily_setups.append(
+                f"• <b>{name}</b> | ورود: {setup['entry']:,.4f} | "
+                f"حد ضرر: {setup['stop_loss']:,.4f} | "
+                f"هدف: {setup['take_profit']:,.4f} | "
+                f"ریسک به بازده: {setup['risk_reward']}"
+            )
+
+    lines += ["", "📐 <b>تحلیل تکنیکال چندتایم‌فریمی</b>"]
+    if technical_lines:
+        lines += technical_lines
+    else:
+        lines.append("داده تکنیکال معتبر در این اجرا دریافت نشد؛ بنابراین اجماع تایم‌فریم‌ها قابل محاسبه نیست.")
+    if daily_setups:
+        lines += ["", "🎯 <b>موقعیت ورود روزانه</b>"] + daily_setups
+    else:
+        lines += ["", "🎯 <b>سیگنال معاملاتی:</b> فعلاً موقعیت ورود روزانه با شروط سیستم تأیید نشده است."]
+    if technical_errors:
+        unique_errors = list(dict.fromkeys(str(error) for error in technical_errors))
+        lines.append("علت/خطای دریافت داده: " + html.escape("؛ ".join(unique_errors[:2])[:260]))
     factors = [
         item for item in report.get("factors", [])
         if item.get("score") is not None and item.get("detail")
