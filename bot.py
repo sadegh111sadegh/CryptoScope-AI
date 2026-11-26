@@ -60,6 +60,8 @@ def build_messages(report):
     forecast = report.get("forecast") or {}
     if regime.get("label"):
         lines += ["", "🧭 <b>رژیم بازار</b>", html.escape(regime["label"]) + " | نوسان: " + html.escape(str(regime.get("volatility_state", "نامشخص")))]
+        for evidence in (regime.get("evidence") or [])[:4]:
+            lines.append("  ◦ " + html.escape(str(evidence)))
     if forecast.get("available"):
         probs = forecast.get("probabilities") or {}
         lines += [
