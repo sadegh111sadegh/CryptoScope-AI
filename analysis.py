@@ -1,4 +1,5 @@
 from market_data import get_market_snapshot
+from options_expiry import get_options_expiry_snapshot
 from news import fetch_news
 from technical_analysis import analyze_market
 from intelligence import detect_market_regime, detect_divergences, number as _number
@@ -41,6 +42,10 @@ def _flow_detail(value):
 
 def build_report(history_path=DEFAULT_PATH):
     market = get_market_snapshot()
+    try:
+        options_expiry = get_options_expiry_snapshot()
+    except Exception as exc:
+        options_expiry = {"available": False, "errors": [str(exc)]}
     news = fetch_news()
     factors, signals = [], []
 
@@ -187,7 +192,7 @@ def build_report(history_path=DEFAULT_PATH):
         factor["adaptive_weight"] = adaptive["weights"].get(factor["name"], 1.0)
 
     return {
-        "market": market, "technical": technical, "direction": direction,
+        "market": market, "technical": technical, "options_expiry": options_expiry, "direction": direction,
         "score": score, "confidence": confidence, "horizon": horizon,
         "factors": factors, "network": network, "news": news,
         "important_news": important_news, "critical_news": critical_news,
