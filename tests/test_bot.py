@@ -154,8 +154,11 @@ class BotReportTests(unittest.TestCase):
         self.assertIn("سررسید آپشن‌ها", message)
         self.assertIn("18.5%", message)
         self.assertIn("2026-11-27", message)
-        self.assertIn("80,000", message)
-        self.assertIn("OI بالا به‌تنهایی جهت قیمت را مشخص نمی‌کند", message)
+        self.assertIn("حجم OI:", message)
+        self.assertIn("Put/Call:", message)
+        self.assertIn("تمایل قراردادها بیشتر صعودی است", message)
+        self.assertIn("نسبت قراردادهای فروش به خرید", message)
+        self.assertNotIn("بزرگ‌ترین Strikeها", message)
 
     def test_generic_trading_disclaimer_is_removed(self):
         message = "\\n".join(build_messages(sample_report()))
