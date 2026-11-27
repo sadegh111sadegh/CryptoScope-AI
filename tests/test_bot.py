@@ -27,12 +27,12 @@ def sample_report(important_news=None, news_available=False):
 
 class BotReportTests(unittest.TestCase):
     def test_news_section_is_hidden_when_sources_fail(self):
-        message = "\n".join(build_messages(sample_report(news_available=False)))
+        message = "\\n".join(build_messages(sample_report(news_available=False)))
         self.assertNotIn("خبرهای مهم ۴۸ ساعت اخیر", message)
         self.assertNotIn("دریافت خبر از منابع ناموفق بود", message)
 
     def test_news_section_is_hidden_when_no_important_news_exists(self):
-        message = "\n".join(build_messages(sample_report(news_available=True)))
+        message = "\\n".join(build_messages(sample_report(news_available=True)))
         self.assertNotIn("خبرهای مهم ۴۸ ساعت اخیر", message)
         self.assertNotIn("خبر مهمی مطابق معیارها", message)
 
@@ -45,10 +45,9 @@ class BotReportTests(unittest.TestCase):
             "source": "example.com",
             "score": 80,
         }]
-        message = "\n".join(build_messages(sample_report(news, news_available=True)))
+        message = "\\n".join(build_messages(sample_report(news, news_available=True)))
         self.assertIn("خبرهای مهم ۴۸ ساعت اخیر", message)
         self.assertIn("نمونه خبر مهم درباره نرخ بهره", message)
-
 
     def test_daily_trade_levels_are_shown_only_when_setup_exists(self):
         report = sample_report()
@@ -72,7 +71,7 @@ class BotReportTests(unittest.TestCase):
                 }
             },
         }
-        message = "\n".join(build_messages(report))
+        message = "\\n".join(build_messages(report))
         self.assertIn("موقعیت ورود روزانه", message)
         self.assertIn("حد ضرر: 114.0000", message)
         self.assertIn("هدف: 132.0000", message)
@@ -88,7 +87,7 @@ class BotReportTests(unittest.TestCase):
                 }
             },
         }
-        message = "\n".join(build_messages(report))
+        message = "\\n".join(build_messages(report))
         self.assertNotIn("🎯 <b>موقعیت ورود روزانه</b>", message)
 
     def test_missing_technical_data_is_reported_explicitly(self):
@@ -122,14 +121,14 @@ class BotReportTests(unittest.TestCase):
     def test_fear_greed_score_is_shown_and_explanation_is_hidden(self):
         report = sample_report()
         report["market"]["fear_greed"] = {"value": 15, "interpretation": "ترس شدید"}
-        message = "\n".join(build_messages(report))
+        message = "\\n".join(build_messages(report))
         self.assertIn("15/100", message)
         self.assertIn("ترس شدید", message)
         self.assertNotIn("این بخش فقط حال‌وهوای خریداران", message)
 
     def test_etf_explanation_and_unavailable_placeholders_are_hidden(self):
         report = sample_report()
-        message = "\n".join(build_messages(report))
+        message = "\\n".join(build_messages(report))
         self.assertNotIn("ورود پول یعنی تقاضای بیشتر", message)
         self.assertNotIn("داده ETF دریافت نشد", message)
         self.assertNotIn("داده معتبر در دسترس نیست", message)
@@ -155,11 +154,11 @@ class BotReportTests(unittest.TestCase):
         self.assertIn("سررسید آپشن‌ها", message)
         self.assertIn("18.5%", message)
         self.assertIn("2026-11-27", message)
-        self.assertIn("80000", message)
+        self.assertIn("80,000", message)
         self.assertIn("OI بالا به‌تنهایی جهت قیمت را مشخص نمی‌کند", message)
 
     def test_generic_trading_disclaimer_is_removed(self):
-        message = "\n".join(build_messages(sample_report()))
+        message = "\\n".join(build_messages(sample_report()))
         self.assertNotIn("توصیه خریدوفروش", message)
 
 
