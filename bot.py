@@ -139,38 +139,51 @@ def build_messages(report):
 
     options = report.get("options_expiry") or {}
     if options.get("available"):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        iran_tz = ZoneInfo("Asia/Tehran")
         lines += ["", "🧨 <b>سررسید آپشن‌ها | Deribit</b>"]
         lines.append(
-            f"⚠️ تمرکز OI در ۲۴ ساعت آینده: <b>{options.get('oi_expiring_24h_pct', 0):.1f}%</b> "
-            f"| ریسک تمرکز سررسید: <b>{html.escape(str(options.get('expiry_risk', 'نامشخص')))}</b>"
+            f"سهم OI سررسیدشونده در ۲۴ ساعت آینده: "
+            f"<b>{options.get('oi_expiring_24h_pct', 0):.1f}%</b> "
+            f"| ریسک کلی سررسید: <b>{html.escape(str(options.get('expiry_risk', 'نامشخص')))}</b>"
         )
-        lines.append(
-            f"💰 ارزش تقریبی OI کل: ${options.get('total_oi_usd', 0):,.0f} "
-            f"| سررسید ۲۴ساعته: ${options.get('oi_expiring_24h_usd', 0):,.0f}"
-        )
-        for symbol in ("BTC", "ETH"):
+        for symbol, label in (("BTC", "بیت‌کوین"), ("ETH", "اتریوم")):
             expiries = (options.get("assets") or {}).get(symbol) or []
             if not expiries:
                 continue
             item = expiries[0]
-            lines.append(
-                f"• <b>{symbol}</b> | سررسید بعدی: {html.escape(item['expiry_date'])} "
-                f"(حدود {item['hours_to_expiry']:.0f} ساعت دیگر)"
-            )
-            lines.append(
-                f"  OI: {item['total_oi']:,.2f} {symbol} (~${item['oi_usd']:,.0f}) "
-                f"| Call: {item['call_oi']:,.2f} | Put: {item['put_oi']:,.2f}"
-            )
-            if item.get("put_call_ratio") is not None:
-                lines.append(f"  نسبت Put/Call: {item['put_call_ratio']:.2f}")
-            strikes = item.get("top_strikes") or []
-            if strikes:
-                levels = "، ".join(
-                    f"{float(level['strike']):,.0f} ({level['oi']:,.2f})"
-                    for level in strikes[:3]
-                )
-                lines.append("  بزرگ‌ترین Strikeها (OI): " + levels)
-        lines.append("<i>OI بالا به‌تنهایی جهت قیمت را مشخص نمی‌کند؛ این شاخص فقط تمرکز قراردادهای در آستانه سررسید را نشان می‌دهد. داده از Deribit.</i>")
+            expiry_raw = item.get("expiry")
+            try:
+                expiry_time = datetime.fromisoformat(expiry_raw.replace("Z", "+00:00")).astimezone(iran_tz)
+                iran_clock = expiry_time.strftime("%H:%M")
+                iran_date = expiry_time.strftime("%Y-%m-%d")
+            except (TypeError, ValueError):
+                iran_clock = "نامشخص"
+                iran_date = item.get("expiry_date", "نامشخص")
+
+            ratio = item.get("put_call_ratio")
+            if ratio is None:
+                interpretation = "اطلاعات کافی برای تشخیص تمایل بازار نداریم."
+                ratio_text = "نامشخص"
+            elif ratio >= 1.3:
+                interpretation = "احتمال فشار نزولی بیشتر است؛ اما ریزش شارپ تأیید نمی‌شود."
+                ratio_text = f"{ratio:.2f}"
+            elif ratio <= 0.75:
+                interpretation = "تمایل قراردادها بیشتر صعودی است؛ اما تضمین رشد قیمت نیست."
+                ratio_text = f"{ratio:.2f}"
+            else:
+                interpretation = "وضعیت نسبتاً متعادل است؛ نشانه قوی از فشار نزولی دیده نمی‌شود."
+                ratio_text = f"{ratio:.2f}"
+
+            lines += [
+                f"• <b>{label}</b>",
+                f"  ساعت سررسید: <b>{iran_clock}</b> | تاریخ: {iran_date} (به وقت ایران)",
+                f"  حجم OI: <b>{item.get('total_oi', 0):,.2f} {symbol}</b> | Put/Call: <b>{ratio_text}</b>",
+                f"  برداشت: {interpretation}",
+            ]
+        lines.append("<i>Put/Call نسبت قراردادهای فروش به خرید است؛ عدد بالاتر از ۱ یعنی تعداد/حجم قراردادهای Put بیشتر است. این نسبت به‌تنهایی احتمال عددی یا پیش‌بینی قطعی قیمت نیست.</i>")
 
     network = report.get("network") or {}
     network_lines = []
