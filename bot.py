@@ -137,6 +137,41 @@ def build_messages(report):
     if etf_lines:
         lines += ["", "📊 <b>جریان ورود و خروج پول ETF</b>"] + etf_lines
 
+    options = report.get("options_expiry") or {}
+    if options.get("available"):
+        lines += ["", "🧨 <b>سررسید آپشن‌ها | Deribit</b>"]
+        lines.append(
+            f"⚠️ تمرکز OI در ۲۴ ساعت آینده: <b>{options.get('oi_expiring_24h_pct', 0):.1f}%</b> "
+            f"| ریسک تمرکز سررسید: <b>{html.escape(str(options.get('expiry_risk', 'نامشخص')))}</b>"
+        )
+        lines.append(
+            f"💰 ارزش تقریبی OI کل: ${options.get('total_oi_usd', 0):,.0f} "
+            f"| سررسید ۲۴ساعته: ${options.get('oi_expiring_24h_usd', 0):,.0f}"
+        )
+        for symbol in ("BTC", "ETH"):
+            expiries = (options.get("assets") or {}).get(symbol) or []
+            if not expiries:
+                continue
+            item = expiries[0]
+            lines.append(
+                f"• <b>{symbol}</b> | سررسید بعدی: {html.escape(item['expiry_date'])} "
+                f"(حدود {item['hours_to_expiry']:.0f} ساعت دیگر)"
+            )
+            lines.append(
+                f"  OI: {item['total_oi']:,.2f} {symbol} (~${item['oi_usd']:,.0f}) "
+                f"| Call: {item['call_oi']:,.2f} | Put: {item['put_oi']:,.2f}"
+            )
+            if item.get("put_call_ratio") is not None:
+                lines.append(f"  نسبت Put/Call: {item['put_call_ratio']:.2f}")
+            strikes = item.get("top_strikes") or []
+            if strikes:
+                levels = "، ".join(
+                    f"{float(level['strike']):,.0f} ({level['oi']:,.2f})"
+                    for level in strikes[:3]
+                )
+                lines.append("  بزرگ‌ترین Strikeها (OI): " + levels)
+        lines.append("<i>OI بالا به‌تنهایی جهت قیمت را مشخص نمی‌کند؛ این شاخص فقط تمرکز قراردادهای در آستانه سررسید را نشان می‌دهد. داده از Deribit.</i>")
+
     network = report.get("network") or {}
     network_lines = []
     for key, label in (("n-transactions", "تعداد تراکنش‌ها"), ("hash-rate", "قدرت محاسباتی شبکه")):
