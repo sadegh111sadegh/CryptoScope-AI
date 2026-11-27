@@ -134,6 +134,30 @@ class BotReportTests(unittest.TestCase):
         self.assertNotIn("داده ETF دریافت نشد", message)
         self.assertNotIn("داده معتبر در دسترس نیست", message)
 
+    def test_options_expiry_section_is_shown_when_data_exists(self):
+        report = sample_report()
+        report["options_expiry"] = {
+            "available": True, "oi_expiring_24h_pct": 18.5,
+            "expiry_risk": "متوسط", "total_oi_usd": 2500000000,
+            "oi_expiring_24h_usd": 460000000,
+            "assets": {
+                "BTC": [{
+                    "expiry_date": "2026-11-27", "hours_to_expiry": 8,
+                    "total_oi": 120.0, "oi_usd": 8400000,
+                    "call_oi": 70.0, "put_oi": 50.0,
+                    "put_call_ratio": 0.714,
+                    "top_strikes": [{"strike": "80000", "oi": 60.0}],
+                }],
+                "ETH": [],
+            },
+        }
+        message = "\\n".join(build_messages(report))
+        self.assertIn("سررسید آپشن‌ها", message)
+        self.assertIn("18.5%", message)
+        self.assertIn("2026-11-27", message)
+        self.assertIn("80000", message)
+        self.assertIn("OI بالا به‌تنهایی جهت قیمت را مشخص نمی‌کند", message)
+
     def test_generic_trading_disclaimer_is_removed(self):
         message = "\n".join(build_messages(sample_report()))
         self.assertNotIn("توصیه خریدوفروش", message)
