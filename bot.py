@@ -71,9 +71,13 @@ def build_messages(report):
         ]
     divergences = report.get("divergences") or []
     if divergences:
-        lines += ["", "⚠️ <b>واگرایی‌های شناسایی‌شده</b>"]
+        lines += ["", "📌 <b>نشانه‌های مهم بازار</b>"]
         for item in divergences[:4]:
-            lines.append("• " + html.escape(item.get("name", "")) + ": " + html.escape(item.get("detail", "")))
+            direction = str(item.get("type", "")).lower()
+            marker = "🔴" if direction == "bearish" else "🟢" if direction == "bullish" else "🟡"
+            detail = str(item.get("detail", ""))
+            detail = detail.replace("واگرایی تقاضا", "ضعف احتمالی تقاضا").replace("واگرایی", "اختلاف روند")
+            lines.append(marker + " <b>" + html.escape(item.get("name", "")) + "</b>: " + html.escape(detail))
     performance = report.get("forecast_performance") or {}
     if performance.get("settled", 0):
         brier = performance.get("brier_score")
