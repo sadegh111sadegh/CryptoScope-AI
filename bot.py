@@ -154,36 +154,33 @@ def build_messages(report):
             expiry_raw = item.get("expiry")
             expiry_date = item.get("expiry_date", "نامشخص")
             iran_clock = "نامشخص"
-            iran_date = expiry_date
             if isinstance(expiry_raw, str) and expiry_raw.strip():
                 try:
                     expiry_time = datetime.fromisoformat(expiry_raw.replace("Z", "+00:00")).astimezone(iran_tz)
                     iran_clock = expiry_time.strftime("%H:%M")
-                    iran_date = expiry_time.strftime("%Y-%m-%d")
                 except (TypeError, ValueError):
                     pass
 
             ratio = item.get("put_call_ratio")
             if ratio is None:
-                interpretation = "اطلاعات کافی برای تشخیص تمایل بازار نداریم."
                 ratio_text = "نامشخص"
+                ratio_marker = "⚪"
             elif ratio >= 1.3:
-                interpretation = "احتمال فشار نزولی بیشتر است؛ اما ریزش شارپ تأیید نمی‌شود."
                 ratio_text = f"{ratio:.2f}"
+                ratio_marker = "🔴"
             elif ratio <= 0.75:
-                interpretation = "تمایل قراردادها بیشتر صعودی است؛ اما تضمین رشد قیمت نیست."
                 ratio_text = f"{ratio:.2f}"
+                ratio_marker = "🟢"
             else:
-                interpretation = "وضعیت نسبتاً متعادل است؛ نشانه قوی از فشار نزولی دیده نمی‌شود."
                 ratio_text = f"{ratio:.2f}"
+                ratio_marker = "🟡"
 
             lines += [
                 f"• <b>{label}</b>",
-                f"  ساعت سررسید: <b>{iran_clock}</b> | تاریخ: {iran_date} (به وقت ایران)",
-                f"  حجم OI: <b>{item.get('total_oi', 0):,.2f} {symbol}</b> | Put/Call: <b>{ratio_text}</b>",
-                f"  برداشت: {interpretation}",
+                f"  ساعت سررسید: <b>{iran_clock} تهران</b>",
+                f"  OI حجم: <b>{item.get('total_oi', 0):,.2f} {symbol}</b> | Put/Call: <b>{ratio_marker} {ratio_text}</b>",
             ]
-        lines.append("<i>Put/Call نسبت قراردادهای فروش به خرید است؛ عدد بالاتر از ۱ یعنی حجم قراردادهای Put بیشتر است. این نسبت به‌تنهایی پیش‌بینی قطعی قیمت نیست.</i>")
+        lines.append("<i>🔴 بالاتر از 1.30: تمایل نزولی | 🟢 پایین‌تر از 0.75: تمایل صعودی | 🟡 بین این دو: متعادل</i>")
 
     network = report.get("network") or {}
     network_lines = []
