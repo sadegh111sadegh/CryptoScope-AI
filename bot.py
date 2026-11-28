@@ -237,18 +237,14 @@ def build_messages(report):
                 f"ریسک به بازده: {setup['risk_reward']}"
             )
 
-    lines += ["", "📐 <b>تحلیل تکنیکال چندتایم‌فریمی</b>"]
+    # Only show technical analysis when at least one timeframe actually loaded.
+    # Missing exchange data is silently omitted instead of cluttering the daily report.
     if technical_lines:
-        lines += technical_lines
-    else:
-        lines.append("داده تکنیکال معتبر در این اجرا دریافت نشد؛ بنابراین اجماع تایم‌فریم‌ها قابل محاسبه نیست.")
-    if daily_setups:
-        lines += ["", "🎯 <b>موقعیت ورود روزانه</b>"] + daily_setups
-    else:
-        lines += ["", "🎯 <b>سیگنال معاملاتی:</b> فعلاً هیچ ستاپ ورود روزانه‌ای با شروط سیستم تأیید نشده است."]
-    if technical_errors:
-        unique_errors = list(dict.fromkeys(str(error) for error in technical_errors))
-        lines.append("علت/خطای دریافت داده: " + html.escape("؛ ".join(unique_errors[:2])[:260]))
+        lines += ["", "📐 <b>تحلیل تکنیکال چندتایم‌فریمی</b>"] + technical_lines
+        if daily_setups:
+            lines += ["", "🎯 <b>موقعیت ورود روزانه</b>"] + daily_setups
+        elif any((assets.get(asset_id) or {}).get("timeframes", {}).get("1d") for asset_id in ("bitcoin", "ethereum", "solana")):
+            lines += ["", "🎯 <b>سیگنال معاملاتی:</b> فعلاً ستاپ ورود روزانه تأیید نشده است."]
     factors = [item for item in report.get("factors", []) if item.get("score") is not None and item.get("detail")]
     if factors:
         lines += ["", "🧠 <b>تفسیر عوامل اثرگذار</b>"]
