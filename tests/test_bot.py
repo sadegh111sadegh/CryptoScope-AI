@@ -90,16 +90,16 @@ class BotReportTests(unittest.TestCase):
         message = "\\n".join(build_messages(report))
         self.assertNotIn("🎯 <b>موقعیت ورود روزانه</b>", message)
 
-    def test_missing_technical_data_is_reported_explicitly(self):
+    def test_missing_technical_data_is_silently_omitted(self):
         report = sample_report()
         report["technical"]["assets"]["bitcoin"] = {
             "timeframes": {}, "errors": ["Binance timeout"]
         }
         message = "\\n".join(build_messages(report))
-        self.assertIn("تحلیل تکنیکال چندتایم‌فریمی", message)
-        self.assertIn("داده تکنیکال معتبر", message)
-        self.assertIn("Binance timeout", message)
-        self.assertIn("هیچ ستاپ ورود روزانه", message)
+        self.assertNotIn("تحلیل تکنیکال چندتایم‌فریمی", message)
+        self.assertNotIn("داده تکنیکال معتبر", message)
+        self.assertNotIn("Binance timeout", message)
+        self.assertNotIn("هیچ ستاپ ورود روزانه", message)
 
     def test_partial_timeframe_data_is_shown_without_consensus(self):
         report = sample_report()
