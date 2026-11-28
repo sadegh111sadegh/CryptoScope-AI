@@ -105,10 +105,7 @@ def build_messages(report):
 
     if fg and fg.get("value") is not None:
         value = int(fg["value"])
-        lines += [
-            "", "😨 <b>ترس و طمع بازار</b>",
-            f"{fear_bar(value)}  <b>{html.escape(str(fg.get('interpretation', '')))} | {value}/100</b>",
-        ]
+        lines += ["", "😨 <b>ترس و طمع بازار</b>", f"{fear_bar(value)}  <b>{html.escape(str(fg.get('interpretation', '')))} | {value}/100</b>"]
 
     liquidity_lines = []
     if stable and stable.get("change_7d") is not None:
@@ -155,13 +152,16 @@ def build_messages(report):
                 continue
             item = expiries[0]
             expiry_raw = item.get("expiry")
-            try:
-                expiry_time = datetime.fromisoformat(expiry_raw.replace("Z", "+00:00")).astimezone(iran_tz)
-                iran_clock = expiry_time.strftime("%H:%M")
-                iran_date = expiry_time.strftime("%Y-%m-%d")
-            except (TypeError, ValueError):
-                iran_clock = "نامشخص"
-                iran_date = item.get("expiry_date", "نامشخص")
+            expiry_date = item.get("expiry_date", "نامشخص")
+            iran_clock = "نامشخص"
+            iran_date = expiry_date
+            if isinstance(expiry_raw, str) and expiry_raw.strip():
+                try:
+                    expiry_time = datetime.fromisoformat(expiry_raw.replace("Z", "+00:00")).astimezone(iran_tz)
+                    iran_clock = expiry_time.strftime("%H:%M")
+                    iran_date = expiry_time.strftime("%Y-%m-%d")
+                except (TypeError, ValueError):
+                    pass
 
             ratio = item.get("put_call_ratio")
             if ratio is None:
@@ -183,7 +183,7 @@ def build_messages(report):
                 f"  حجم OI: <b>{item.get('total_oi', 0):,.2f} {symbol}</b> | Put/Call: <b>{ratio_text}</b>",
                 f"  برداشت: {interpretation}",
             ]
-        lines.append("<i>Put/Call نسبت قراردادهای فروش به خرید است؛ عدد بالاتر از ۱ یعنی تعداد/حجم قراردادهای Put بیشتر است. این نسبت به‌تنهایی احتمال عددی یا پیش‌بینی قطعی قیمت نیست.</i>")
+        lines.append("<i>Put/Call نسبت قراردادهای فروش به خرید است؛ عدد بالاتر از ۱ یعنی حجم قراردادهای Put بیشتر است. این نسبت به‌تنهایی پیش‌بینی قطعی قیمت نیست.</i>")
 
     network = report.get("network") or {}
     network_lines = []
@@ -205,10 +205,7 @@ def build_messages(report):
         name = html.escape(asset.get("name", asset_id))
         timeframes = asset.get("timeframes") or {}
         if asset.get("score") is not None:
-            technical_lines.append(
-                f"• <b>{name}:</b> {html.escape(asset.get('signal', 'نامشخص'))} | "
-                f"اجماع {asset['score']}/100"
-            )
+            technical_lines.append(f"• <b>{name}:</b> {html.escape(asset.get('signal', 'نامشخص'))} | اجماع {asset['score']}/100")
         elif not timeframes:
             technical_errors.extend(asset.get("errors") or [])
 
@@ -227,10 +224,7 @@ def build_messages(report):
             if macd is not None:
                 details.append("MACD مثبت" if macd > 0 else "MACD منفی" if macd < 0 else "MACD خنثی")
             status = html.escape(item.get("signal", "نامشخص"))
-            technical_lines.append(
-                f"  ◦ {name} | {interval}: {status}" +
-                (" | " + " | ".join(details) if details else "")
-            )
+            technical_lines.append(f"  ◦ {name} | {interval}: {status}" + (" | " + " | ".join(details) if details else ""))
 
         daily = timeframes.get("1d") or {}
         setup = daily.get("entry_setup")
@@ -254,10 +248,7 @@ def build_messages(report):
     if technical_errors:
         unique_errors = list(dict.fromkeys(str(error) for error in technical_errors))
         lines.append("علت/خطای دریافت داده: " + html.escape("؛ ".join(unique_errors[:2])[:260]))
-    factors = [
-        item for item in report.get("factors", [])
-        if item.get("score") is not None and item.get("detail")
-    ]
+    factors = [item for item in report.get("factors", []) if item.get("score") is not None and item.get("detail")]
     if factors:
         lines += ["", "🧠 <b>تفسیر عوامل اثرگذار</b>"]
         for factor in factors:
@@ -271,11 +262,7 @@ def build_messages(report):
     if important_news:
         lines += ["", "🚨 <b>خبرهای مهم ۴۸ ساعت اخیر</b>"]
         for item in important_news[:4]:
-            lines.append(
-                f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\n"
-                f"{safe_link(item)}\n"
-                f"<i>{html.escape(item['source'])}</i>"
-            )
+            lines.append(f"• <b>{html.escape(item['level'])} | {html.escape(item['category'])}</b>\n{safe_link(item)}\n<i>{html.escape(item['source'])}</i>")
 
     messages, current = [], ""
     for line in lines:
